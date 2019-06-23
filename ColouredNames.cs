@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("ColouredNames", "collect_vood & PsychoTea", "1.3.2", ResourceId = 1362)]
+    [Info("ColouredNames", "collect_vood & PsychoTea", "1.3.4", ResourceId = 1362)]
     [Description("Allows players to change their name colour in chat.")]
 
     class ColouredNames : RustPlugin
@@ -25,8 +25,33 @@ namespace Oxide.Plugins
 
         Dictionary<ulong, string> colour = new Dictionary<ulong, string>();
         List<string> blockedColours = new List<string>();
-        List<string> supportedColours = new List<string> { "black", "blue", "green", "orange", "purple", "red", "white", "yellow" };
-        bool allowHexcode;
+
+        #region Lang
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>()
+            {
+                { "NoPermission", "You don't have permission to use this." },
+                { "NoPermissionSetOthers", "You don't have permission to set other players' colours." },
+                { "IncorrectUsage", "<color=#00AAFF>Incorrect usage!</color><color=#A8A8A8> /colour {{colour}} [player]\nFor a list of colours do /colours</color>" },
+                { "PlayerNotFound", "Player {0} was not found." },
+                { "SizeBlocked", "You may not try and change your size! You sneaky player..." },
+                { "InvalidCharacters", "The character '{0}' is not allowed in colours. Please remove it." },
+                { "ColourBlocked", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>That colour is blocked.</color>" },
+                { "ColourRemoved", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour removed!</color>" },
+                { "ColourChanged", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour changed to </color><color={0}>{0}</color><color=#A8A8A8>!</color>" },
+                { "ColourChangedFor", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>{0}'s name colour changed to </color><color={1}>{1}</color><color=#A8A8A8>!</color>" },
+                { "ChatMessage", "<color={0}>{1}</color>: {2}" },
+                { "LogInfo", "[CHAT] {0}[{1}/{2}] : {3}" },
+                { "ColoursInfo", "<color=#00AAFF>ColouredNames</color><color=#A8A8A8>\nYou can only use hexcode, eg '</color><color=#FFFF00>#FFFF00</color><color=#A8A8A8>'\nTo remove your colour, use 'clear' or 'remove'\nAn invalid colour will default to </color>white<color=#A8A8A8></color>" },
+                { "CantUseClientside", "You may not use this command from ingame - server cosole only." },
+                { "ConsoleColourIncorrectUsage", "Incorrect usage! colour {{userid}} {{colour}}" },
+                { "InvalidIDConsole", "Error! {0} is not a SteamID!" },
+                { "ConsoleColourChanged", "Colour of {0} changed to {1}." },
+                { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." }
+            }, this);
+        }
+        #endregion
 
         #region Hooks
 
@@ -35,33 +60,9 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permUse, this);
             permission.RegisterPermission(permBypass, this);
             permission.RegisterPermission(permSetOthers, this);
-
-            lang.RegisterMessages(new Dictionary<string, string>()
-            {
-                { "NoPermission", "You don't have permission to use this." },
-                { "NoPermissionSetOthers", "You don't have permission to set other players' colours." },
-                { "IncorrectUsage", "<color=#00AAFF>Incorrect usage!</color><color=#A8A8A8> /colour {{colour}} [player]\nFor a list of colours do /colours</color>" },
-                { "PlayerNotFound", "Player {0} was not found." },
-                { "SizeBlocked", "You may not try and change your size! You sneaky player..." },
-                { "HexcodeBlocked", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Hexcode colour codes have been disabled.</color>" },
-                { "InvalidCharacters", "The character '{0}' is not allowed in colours. Please remove it." },
-                { "ColourBlocked", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>That colour is blocked.</color>" },
-                { "ColourRemoved", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour removed!</color>" },
-                { "ColourChanged", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour changed to </color><color={0}>{0}</color><color=#A8A8A8>!</color>" },
-                { "ColourChangedFor", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>{0}'s name colour changed to </color><color={1}>{1}</color><color=#A8A8A8>!</color>" },
-                { "ChatMessage", "<color={0}>{1}</color>: {2}" },
-                { "LogInfo", "[CHAT] {0}[{1}/{2}] : {3}" },
-                { "ColoursInfo", "<color=#00AAFF>ColouredNames</color><color=#A8A8A8>\nSupported colours:\n<color=black>black<color=#A8A8A8>, <color=blue>blue<color=#A8A8A8>, <color=green>green<color=#A8A8A8>, <color=orange>orange<color=#A8A8A8>, <color=purple>purple<color=#A8A8A8>, <color=red>red<color=#A8A8A8>, <color=white>white<color=#A8A8A8>, and <color=yellow>yellow<color=#A8A8A8>.\nOr you may use any hexcode (if enabled), eg '</color><color=#FFFF00>#FFFF00</color><color=#A8A8A8>'\nTo remove your colour, use 'clear' or 'remove'\nAn invalid colour will default to </color>white<color=#A8A8A8></color>" },
-                { "CantUseClientside", "You may not use this command from ingame - server cosole only." },
-                { "ConsoleColourIncorrectUsage", "Incorrect usage! colour {{userid}} {{colour}}" },
-                { "InvalidIDConsole", "Error! {0} is not a SteamID!" },
-                { "ConsoleColourChanged", "Colour of {0} changed to {1}." },
-                { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." }
-            }, this);
-
+          
             ReadData();
 
-            allowHexcode = GetConfig<bool>("AllowHexcode");
             foreach (var obj in GetConfig<List<object>>("BlockedColours"))
                 blockedColours.Add(obj.ToString().ToLower());
         }
@@ -70,8 +71,7 @@ namespace Oxide.Plugins
         {
             PrintWarning("Creating a new configuration file.");
 
-            Config["AllowHexcode"] = true;
-            Config["BlockedColours"] = new List<string>() { "#000000", "black" };
+            Config["BlockedColours"] = new List<string>() { "#000000" };
 
             Puts("New config file generated.");
         }
@@ -139,11 +139,6 @@ namespace Oxide.Plugins
 
             if (!CanBypass(player))
             {
-                if (!allowHexcode && args[0].Contains("#"))
-                {
-                    player.ChatMessage(GetMessage("HexcodeBlocked", player));
-                    return;
-                }
 
                 if (blockedColours.Where(x => x == colLower).Any())
                 {
@@ -274,7 +269,7 @@ namespace Oxide.Plugins
 
         #region Helpers
 
-        bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success || supportedColours.Contains(input);
+        bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success;
 
         bool BetterChatIns() => (BetterChat != null);
 

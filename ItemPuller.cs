@@ -5,32 +5,60 @@ using Newtonsoft.Json;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.0.0")]
-    [Description("Gives you the ability to pull items from boxes with simply double clicking the item in craft-tab")]
+    [Info("Item Puller", "collect_vood", "1.0.2")]
+    [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : RustPlugin
     {
         const string permUse = "itempuller.use";
         const string permForcePull = "itempuller.forcepull";
 
+        #region Lang
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>()
+            {
+                { "NoPermission", "You don't have permission to use this." },
+                { "InvalidArg", "Invalid argument" },
+                { "MissingItem", "Missing <color=red>{0}</color>!" },
+                { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller - <color=#32CD32>{0}</color>\nAutocraft - <color=#32CD32>{1}</color>\nFrom Toolcupboard - <color=#32CD32>{2}</color>\nForce Pulling - <color=#32CD32>{3}</color>" },
+                { "ForcePulled", "Item were force pulled <color=green>sucessfully</color>!" },
+                { "ItemsPulled", "Items were moved <color=green>successfully</color>!" },
+                { "NotInBuildingZone", "You need to be in building priviledge zone to use item puller!" },
+                { "PlayerFull", "Cannot pull items, inventory full!" },
+                { "Help", "<color=#00AAFF>Item Puller Help:</color>\n<color=#32CD32>/ip</color> - toggle item puller on/off\n<color=#32CD32>/ip <autocraft></color> - toggle autocraft on/off\n<color=#32CD32>/ip <fromtc></color> - toggle tool cupboard pulling on/off\n<color=#32CD32>/ip <fp></color> - toggle force pulling on/off\n<color=#32CD32>/ip <settings></color> - show current settings" },
+                { "toggleon", "<color=green>Activated</color> Item Puller" },
+                { "toggleoff", "<color=red>Disabled</color> Item Puller" },
+                { "fromTCon", "<color=green>Activated</color> Item Pulling from Tool Cupboard" },
+                { "fromTCoff", "<color=red>Disabled</color> Item Pulling from Tool Cupboard" },
+                { "autocrafton", "<color=green>Activated</color> Item Puller auto crafting" },
+                { "autocraftoff", "<color=red>Disabled</color> Item Puller auto crafting" },
+                { "fpon", "<color=green>Activated</color> Item force pulling" },
+                { "fpoff", "<color=red>Disabled</color> Item force pulling" }
+            }, this);
+        }
+        #endregion
+
         #region Config
         private Configuration config;
-        class Configuration
+        private class Configuration
         {
             [JsonProperty("Check for Owner (save mode)")]
-            public bool checkForOwner;
+            public bool checkForOwner = false;
 
-            public static Configuration DefaultConfig()
+            [JsonProperty(PropertyName = "Player Default Settings")]
+            public Dictionary<string, bool> PlayerDefaultSettings = new Dictionary<string, bool>
             {
-                return new Configuration()
-                {
-                    checkForOwner = false
-                };
-            }
+                { "Enabled", false },
+                { "Autocraft", false },
+                { "Pull from ToolCupboard", true },
+                { "Force Pull (recommend to not set true)", false }
+            };
+
         }
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file");
-            config = Configuration.DefaultConfig();
+            config = new Configuration();
         }
         protected override void LoadConfig()
         {
@@ -69,20 +97,20 @@ namespace Oxide.Plugins
             {
                 allPlayerSettings[player.userID] = new PlayerSettings
                 {
-                    enabled = true,
-                    autocraft = false,
-                    fromTC = true,
-                    fp = false
+                    enabled = config.PlayerDefaultSettings["Enabled"],
+                    autocraft = config.PlayerDefaultSettings["Autocraft"],
+                    fromTC = config.PlayerDefaultSettings["Pull from ToolCupboard"],
+                    fp = config.PlayerDefaultSettings["Force Pull (recommend to not set true)"]
                 };
             }
         }
         #endregion
 
         #region Hooks
-        private void Loaded() => storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
-
-        private void OnServerInitialized()
+        private void Init()
         {
+            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+
             foreach (var player in Player.Players)
             {
                 CreatePlayerSettings(player);
@@ -92,27 +120,6 @@ namespace Oxide.Plugins
             
             permission.RegisterPermission(permUse, this);
             permission.RegisterPermission(permForcePull, this);
-
-            lang.RegisterMessages(new Dictionary<string, string>()
-            {
-                { "NoPermission", "You don't have permission to use this." },
-                { "InvalidArg", "Invalid argument" },
-                { "MissingItem", "Missing <color=red>{0}</color>!" },
-                { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller - <color=#32CD32>{0}</color>\nAutocraft - <color=#32CD32>{1}</color>\nFrom Toolcupboard - <color=#32CD32>{2}</color>\nForce Pulling - <color=#32CD32>{3}</color>" },
-                { "ForcePulled", "Item were force pulled <color=green>sucessfully</color>!" },
-                { "ItemsPulled", "Items were moved <color=green>successfully</color>!" },
-                { "NotInBuildingZone", "You need to be in building priviledge zone to use item puller!" },
-                { "PlayerFull", "Cannot pull items, inventory full!" },
-                { "Help", "<color=#00AAFF>Item Puller Help:</color>\n<color=#32CD32>/ip</color> - toggle item puller on/off\n<color=#32CD32>/ip <autocraft></color> - toggle autocraft on/off\n<color=#32CD32>/ip <fromtc></color> - toggle tool cupboard pulling on/off\n<color=#32CD32>/ip <fp></color> - toggle force pulling on/off\n<color=#32CD32>/ip <settings></color> - show current settings" },
-                { "toggleon", "<color=green>Activated</color> Item Puller" },
-                { "toggleoff", "<color=red>Disabled</color> Item Puller" },
-                { "fromTCon", "<color=green>Activated</color> Item Pulling from Tool Cupboard" },
-                { "fromTCoff", "<color=red>Disabled</color> Item Pulling from Tool Cupboard" },
-                { "autocrafton", "<color=green>Activated</color> Item Puller auto crafting" },
-                { "autocraftoff", "<color=red>Disabled</color> Item Puller auto crafting" },
-                { "fpon", "<color=green>Activated</color> Item force pulling" },
-                { "fpoff", "<color=red>Disabled</color> Item force pulling" }
-            }, this);
 
             LoadConfig();     
         }
@@ -131,17 +138,17 @@ namespace Oxide.Plugins
             {
                 if (!IsInBuildingZone(player) && !allPlayerSettings[player.userID].fp)
                 {
-                    player.ChatMessage(string.Format(lang.GetMessage("NotInBuildingZone", this)));
+                    player.ChatMessage(string.Format(lang.GetMessage("NotInBuildingZone", this, player.UserIDString)));
                     return null;
                 }
                 if (!HasPerm(player))
                 {
-                    player.ChatMessage(string.Format(lang.GetMessage("NoPermissions", this)));
+                    player.ChatMessage(string.Format(lang.GetMessage("NoPermissions", this, player.UserIDString)));
                     return null;
                 }
                 if (IsFull(player))
                 {
-                    player.ChatMessage(string.Format(lang.GetMessage("PlayerFull", this)));
+                    player.ChatMessage(string.Format(lang.GetMessage("PlayerFull", this, player.UserIDString)));
                     return null;
                 }
 
@@ -171,7 +178,7 @@ namespace Oxide.Plugins
                             }
                             else
                             {
-                                player.ChatMessage(string.Format(lang.GetMessage("MissingItem", this), itemAmount.itemDef.displayName.english));
+                                player.ChatMessage(string.Format(lang.GetMessage("MissingItem", this, player.UserIDString), itemAmount.itemDef.displayName.english));
                                 break;
                             }
                         }
@@ -188,13 +195,13 @@ namespace Oxide.Plugins
                         else
                             Item.Key.MoveToContainer(player.inventory.containerMain);
                     }
-                    player.ChatMessage(string.Format(lang.GetMessage("ItemsPulled", this)));
+                    player.ChatMessage(string.Format(lang.GetMessage("ItemsPulled", this, player.UserIDString)));
                     if (!allPlayerSettings[player.userID].autocraft)
                         return false;
                 }
                 else if (allPlayerSettings[player.userID].fp)
                 {
-                    player.ChatMessage(string.Format(lang.GetMessage("ForcePulled", this)));
+                    player.ChatMessage(string.Format(lang.GetMessage("ForcePulled", this, player.UserIDString)));
                     if (!allPlayerSettings[player.userID].autocraft)
                         return false;
                 }
@@ -208,11 +215,14 @@ namespace Oxide.Plugins
         {
             var player = itemCrafter.GetComponent<BasePlayer>();
             Item item = ItemManager.CreateByItemID(itemid, required);
-            player.GiveItem(item);
+            if (item != null)
+                player.GiveItem(item);
         }
         Dictionary<Item, int> GetUsableItems(BasePlayer player, int itemid, int required)
         {
             var itemDef = ItemManager.FindItemDefinition(itemid);
+            if (itemDef == null)
+                return null;
             var building = player.GetBuildingPrivilege().GetBuilding();
             var possibleItems = new Dictionary<Item, int>();
             if (building != null)
@@ -291,42 +301,42 @@ namespace Oxide.Plugins
                     if (IsEnabled(player))
                     {
                         allPlayerSettings[player.userID].enabled = false;
-                        player.ChatMessage(string.Format(lang.GetMessage("toggleoff", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("toggleoff", this, player.UserIDString)));
                     }                    
                     else
                     {
                         allPlayerSettings[player.userID].enabled = true;
-                        player.ChatMessage(string.Format(lang.GetMessage("toggleon", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("toggleon", this, player.UserIDString)));
                     }                        
                     break;
                 case "autocraft":
                     if (IsAutocraft(player))
                     {
                         allPlayerSettings[player.userID].autocraft = false;
-                        player.ChatMessage(string.Format(lang.GetMessage("autocraftoff", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("autocraftoff", this, player.UserIDString)));
                     }
                     else
                     {
                         allPlayerSettings[player.userID].autocraft = true;
-                        player.ChatMessage(string.Format(lang.GetMessage("autocrafton", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("autocrafton", this, player.UserIDString)));
                     }
                     break;
                 case "fromtc":
                     if (IsFromTC(player))
                     {
                         allPlayerSettings[player.userID].fromTC = false;
-                        player.ChatMessage(string.Format(lang.GetMessage("fromTCoff", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("fromTCoff", this, player.UserIDString)));
                     }
                     else
                     {
                         allPlayerSettings[player.userID].fromTC = true;
-                        player.ChatMessage(string.Format(lang.GetMessage("fromTCon", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("fromTCon", this, player.UserIDString)));
                     }
                     break;
                 case "fp":
                     if (!CanForcePull(player))
                     {
-                        player.ChatMessage(string.Format(lang.GetMessage("NoPermission", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("NoPermission", this, player.UserIDString)));
                         break;
                     }
                     else
@@ -334,12 +344,12 @@ namespace Oxide.Plugins
                         if (IsForcePulling(player))
                         {
                             allPlayerSettings[player.userID].fp = false;
-                            player.ChatMessage(string.Format(lang.GetMessage("fpoff", this)));
+                            player.ChatMessage(string.Format(lang.GetMessage("fpoff", this, player.UserIDString)));
                         }
                         else
                         {
                             allPlayerSettings[player.userID].fp = true;
-                            player.ChatMessage(string.Format(lang.GetMessage("fpon", this)));
+                            player.ChatMessage(string.Format(lang.GetMessage("fpon", this, player.UserIDString)));
                         }
                         break;
                     }
@@ -362,7 +372,7 @@ namespace Oxide.Plugins
                 switch (args[0].ToLower())
                 {
                     case "help":
-                        player.ChatMessage(string.Format(lang.GetMessage("Help", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("Help", this, player.UserIDString)));
                         break;
                     case "ac":
                     case "autocraft":
@@ -377,10 +387,10 @@ namespace Oxide.Plugins
                         break;
                     case "settings":
                         var ps = allPlayerSettings[player.userID];
-                        player.ChatMessage(string.Format(lang.GetMessage("Settings", this), ps.enabled, ps.autocraft, ps.fromTC, ps.fp));
+                        player.ChatMessage(string.Format(lang.GetMessage("Settings", this, player.UserIDString), ps.enabled, ps.autocraft, ps.fromTC, ps.fp));
                         break;
                     default:
-                        player.ChatMessage(string.Format(lang.GetMessage("InvalidArg", this)));
+                        player.ChatMessage(string.Format(lang.GetMessage("InvalidArg", this, player.UserIDString)));
                         break;
                 }
             }
