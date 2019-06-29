@@ -1,11 +1,10 @@
 using System.Collections.Generic;
 using Oxide.Core;
-using Oxide.Game.Rust.Cui;
 using Newtonsoft.Json;
-using UnityEngine;
+
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.0.4")]
+    [Info("Item Puller", "collect_vood", "1.0.5")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : RustPlugin
     {
