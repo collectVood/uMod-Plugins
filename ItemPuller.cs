@@ -395,7 +395,7 @@ namespace Oxide.Plugins
             }
         }
         #endregion
-
+        
         private bool HasPerm(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permUse));
         private bool IsInBuildingZone(BasePlayer player) => (player.IsBuildingAuthed());
         private bool CanForcePull(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permForcePull));
