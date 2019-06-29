@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.0.3")]
+    [Info("Item Puller", "collect_vood", "1.0.4")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : RustPlugin
     {
@@ -394,12 +394,6 @@ namespace Oxide.Plugins
                         break;
                 }
             }
-        }
-        [ChatCommand("t")]
-        void tt(BasePlayer player, string cmd, string[] args)
-        {
-            CreatePlayerSettings(player);
-            SaveData();
         }
         #endregion
 
