@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 using UnityEngine;
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.0.2")]
+    [Info("Item Puller", "collect_vood", "1.0.3")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : RustPlugin
     {
@@ -19,21 +19,21 @@ namespace Oxide.Plugins
             {
                 { "NoPermission", "You don't have permission to use this." },
                 { "InvalidArg", "Invalid argument" },
-                { "MissingItem", "Missing <color=red>{0}</color>!" },
+                { "MissingItem", "Missing <color=#ff0000>{0}</color>!" },
                 { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller - <color=#32CD32>{0}</color>\nAutocraft - <color=#32CD32>{1}</color>\nFrom Toolcupboard - <color=#32CD32>{2}</color>\nForce Pulling - <color=#32CD32>{3}</color>" },
-                { "ForcePulled", "Item were force pulled <color=green>sucessfully</color>!" },
-                { "ItemsPulled", "Items were moved <color=green>successfully</color>!" },
+                { "ForcePulled", "Item were force pulled <color=#7FFF00>sucessfully</color>!" },
+                { "ItemsPulled", "Items were moved <color=#7FFF00>successfully</color>!" },
                 { "NotInBuildingZone", "You need to be in building priviledge zone to use item puller!" },
                 { "PlayerFull", "Cannot pull items, inventory full!" },
                 { "Help", "<color=#00AAFF>Item Puller Help:</color>\n<color=#32CD32>/ip</color> - toggle item puller on/off\n<color=#32CD32>/ip <autocraft></color> - toggle autocraft on/off\n<color=#32CD32>/ip <fromtc></color> - toggle tool cupboard pulling on/off\n<color=#32CD32>/ip <fp></color> - toggle force pulling on/off\n<color=#32CD32>/ip <settings></color> - show current settings" },
-                { "toggleon", "<color=green>Activated</color> Item Puller" },
-                { "toggleoff", "<color=red>Disabled</color> Item Puller" },
-                { "fromTCon", "<color=green>Activated</color> Item Pulling from Tool Cupboard" },
-                { "fromTCoff", "<color=red>Disabled</color> Item Pulling from Tool Cupboard" },
-                { "autocrafton", "<color=green>Activated</color> Item Puller auto crafting" },
-                { "autocraftoff", "<color=red>Disabled</color> Item Puller auto crafting" },
-                { "fpon", "<color=green>Activated</color> Item force pulling" },
-                { "fpoff", "<color=red>Disabled</color> Item force pulling" }
+                { "toggleon", "<color=#7FFF00>Activated</color> Item Puller" },
+                { "toggleoff", "<color=#ff0000>Disabled</color> Item Puller" },
+                { "fromTCon", "<color=#7FFF00>Activated</color> Item Pulling from Tool Cupboard" },
+                { "fromTCoff", "<color=#ff0000>Disabled</color> Item Pulling from Tool Cupboard" },
+                { "autocrafton", "<color=#7FFF00>Activated</color> Item Puller auto crafting" },
+                { "autocraftoff", "<color=#ff0000>Disabled</color> Item Puller auto crafting" },
+                { "fpon", "<color=#7FFF00>Activated</color> Item force pulling" },
+                { "fpoff", "<color=#ff0000>Disabled</color> Item force pulling" }
             }, this);
         }
         #endregion
