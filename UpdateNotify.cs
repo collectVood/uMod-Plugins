@@ -67,7 +67,14 @@ namespace Oxide.Plugins
             }
             var updateInfo = JsonConvert.DeserializeObject<UpdateInfo>(response);
             if (updateInfo.latest_release_version != plugin.Version.ToString())
+            {
                 PrintWarning(lang.GetMessage("Update", this), plugin.Name, plugin.Version, updateInfo.latest_release_version);
+                foreach (var player in Player.Players)
+                {
+                    if (player.IsAdmin)
+                        player.IPlayer.Reply(lang.GetMessage("Update", this, player.UserIDString), plugin.Name, plugin.Version, updateInfo.latest_release_version);
+                }
+            }
             return;
         }
         public static string InsertMinBeforeUpperCase(string str)
