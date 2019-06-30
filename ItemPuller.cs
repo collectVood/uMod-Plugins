@@ -135,6 +135,8 @@ namespace Oxide.Plugins
         }
         object OnMessagePlayer(string message, BasePlayer player)
         {
+            if (player == null)
+                return null;
             if (message == "Can't afford to place!" && allPlayerSettings[player.userID].enabled)
                 return true;
             return null;
@@ -142,9 +144,9 @@ namespace Oxide.Plugins
         object CanCraft(ItemCrafter itemCrafter, ItemBlueprint bp, int amount)
         {
             var player = itemCrafter.GetComponent<BasePlayer>();
-            if (!allPlayerSettings[player.userID].enabled)
-                return null;
             if (player == null)
+                return null;
+            if (!allPlayerSettings[player.userID].enabled)
                 return null;
             if (CheckPermissions(player) == null)
                 return null;
