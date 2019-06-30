@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Oxide.Core;
+using Oxide.Core.Plugins;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
@@ -8,6 +10,9 @@ namespace Oxide.Plugins
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : RustPlugin
     {
+        [PluginReference]
+        private Plugin Friends, Clans;
+
         const string permUse = "itempuller.use";
         const string permForcePull = "itempuller.forcepull";
 
@@ -16,6 +21,8 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
+                { "Missing Friends", "You are missing the Friends API plugin (check for Friends won't work)" },
+                { "Missing Clans", "You are missing the Clans plugin (check for Clans won't work)" },
                 { "NoPermission", "You don't have permission to use this." },
                 { "InvalidArg", "Invalid argument" },
                 { "MissingItem", "Missing <color=#ff0000>{0}</color>!" },
@@ -43,6 +50,8 @@ namespace Oxide.Plugins
         {
             [JsonProperty("Check for Owner (save mode)")]
             public bool checkForOwner = false;
+            public bool checkForFriends = false;
+            public bool checkForClans = false;
 
             [JsonProperty(PropertyName = "Player Default Settings")]
             public Dictionary<string, bool> PlayerDefaultSettings = new Dictionary<string, bool>
@@ -111,16 +120,18 @@ namespace Oxide.Plugins
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
 
             foreach (var player in Player.Players)
-            {
                 CreatePlayerSettings(player);
-            }
-
-            SaveData();
+                SaveData();
             
             permission.RegisterPermission(permUse, this);
             permission.RegisterPermission(permForcePull, this);
-
-            LoadConfig();     
+        }
+        private void Loaded()
+        {
+            if (config.checkForFriends && (!Friends || !Friends.IsLoaded))
+                PrintWarning(lang.GetMessage("Missing Friends", this));
+            if (config.checkForClans && (!Clans || !Clans.IsLoaded))
+                PrintWarning(lang.GetMessage("Missing Clans", this));
         }
         private void OnPlayerInit(BasePlayer player) { CreatePlayerSettings(player); SaveData(); }
 
@@ -129,9 +140,6 @@ namespace Oxide.Plugins
             var player = itemCrafter.GetComponent<BasePlayer>();
             if (!allPlayerSettings[player.userID].enabled)
                 return null;
-            var transferItems = new Dictionary<Item, int>();
-            var hasIngredient = new List<ItemAmount>();
-            int check = 0;
 
             if (player != null)
             {
@@ -151,65 +159,104 @@ namespace Oxide.Plugins
                     return null;
                 }
 
-                foreach (var itemAmount in bp.ingredients)
-                {
-                    if (HasIngredient(itemCrafter, itemAmount, amount))
-                    {
-                        check++;
-                        hasIngredient.Add(itemAmount);
-                        if (hasIngredient.Count >= bp.ingredients.Count)
-                            return null;
-                        continue;
-                    }
-                    else
-                    {
-                        int required = (int)itemAmount.amount;
+                Results results = ScanItems(player, bp.ingredients, amount);
 
-                        if (!allPlayerSettings[player.userID].fp || !CanForcePull(player))
-                        {
-                            // Gets Item info from Containers in Building Area
-                            var possibleItems = GetUsableItems(player, itemAmount.itemid, required);
-                            if (possibleItems != null)
-                            {
-                                check++;
-                                foreach (var Item in possibleItems)
-                                    transferItems.Add(Item.Key, Item.Value);
-                            }
-                            else
-                            {
-                                player.ChatMessage(string.Format(lang.GetMessage("MissingItem", this, player.UserIDString), itemAmount.itemDef.displayName.english));
-                                break;
-                            }
-                        }
-                        else
-                            ForceUsableItem(itemCrafter, itemAmount.itemid, required);
-                    }
-                }
-                if (check >= bp.ingredients.Count)
-                {
-                    foreach (var Item in transferItems)
-                    {
-                        if (Item.Value != 0)
-                            Item.Key.SplitItem(Item.Value).MoveToContainer(player.inventory.containerMain);
-                        else
-                            Item.Key.MoveToContainer(player.inventory.containerMain);
-                    }
-                    player.ChatMessage(string.Format(lang.GetMessage("ItemsPulled", this, player.UserIDString)));
-                    if (!allPlayerSettings[player.userID].autocraft)
-                        return false;
-                }
-                else if (allPlayerSettings[player.userID].fp)
-                {
-                    player.ChatMessage(string.Format(lang.GetMessage("ForcePulled", this, player.UserIDString)));
-                    if (!allPlayerSettings[player.userID].autocraft)
-                        return false;
-                }
+                object status = GiveItems(player, results, bp.ingredients);
+
+                return status;
             }
             return null;
         }
         #endregion
 
         #region Methods
+
+        class Results
+        {
+            public bool hasResources = false;
+            public Dictionary<Item, int> transferItems = new Dictionary<Item, int>();
+            public int check = 0;
+        }
+
+        Results ScanItems(BasePlayer player, List<ItemAmount> ingredients, int amount)
+        {
+            var results = new Results();
+
+            var transferItems = new Dictionary<Item, int>();
+            var hasIngredient = new List<ItemAmount>();
+            int check = 0;
+
+            var itemCrafter = player.GetComponent<ItemCrafter>();
+            if (itemCrafter == null)
+                return results;
+
+            foreach (var itemAmount in ingredients)
+            {
+                if (HasIngredient(itemCrafter, itemAmount, amount))
+                {
+                    check++;
+                    hasIngredient.Add(itemAmount);
+                    if (hasIngredient.Count >= ingredients.Count)
+                    {
+                        results.hasResources = true;
+                        return results;
+                    }
+                    continue;
+                }
+                else
+                {
+                    int required = (int)itemAmount.amount;
+
+                    if (!allPlayerSettings[player.userID].fp || !CanForcePull(player))
+                    {
+                        // Gets Item info from Containers in Building Area
+                        var possibleItems = GetUsableItems(player, itemAmount.itemid, required);
+                        if (possibleItems != null)
+                        {
+                            check++;
+                            foreach (var Item in possibleItems)
+                                transferItems.Add(Item.Key, Item.Value);
+                        }
+                        else
+                        {
+                            player.ChatMessage(string.Format(lang.GetMessage("MissingItem", this, player.UserIDString), itemAmount.itemDef.displayName.english));
+                            break;
+                        }
+                    }
+                    else
+                        ForceUsableItem(itemCrafter, itemAmount.itemid, required);
+                }
+            }
+            results.transferItems = transferItems;
+            results.check = check;
+            return results;
+        }
+        object GiveItems(BasePlayer player, Results results, List<ItemAmount> ingredients)
+        {
+            if (results.hasResources)
+                return null;
+
+            if (results.check >= ingredients.Count)
+            {
+                foreach (var Item in results.transferItems)
+                {
+                    if (Item.Value != 0)
+                        Item.Key.SplitItem(Item.Value).MoveToContainer(player.inventory.containerMain);
+                    else
+                        Item.Key.MoveToContainer(player.inventory.containerMain);
+                }
+                player.ChatMessage(string.Format(lang.GetMessage("ItemsPulled", this, player.UserIDString)));
+                if (!allPlayerSettings[player.userID].autocraft)
+                    return false;
+            }
+            else if (allPlayerSettings[player.userID].fp)
+            {
+                player.ChatMessage(string.Format(lang.GetMessage("ForcePulled", this, player.UserIDString)));
+                if (!allPlayerSettings[player.userID].autocraft)
+                    return false;
+            }
+            return null;
+        }
         private void ForceUsableItem(ItemCrafter itemCrafter, int itemid, int required)
         {
             var player = itemCrafter.GetComponent<BasePlayer>();
@@ -231,10 +278,29 @@ namespace Oxide.Plugins
                     if (decayEntities.GetEntity() is StorageContainer)
                     {
                         var storageContainer = decayEntities.GetEntity() as StorageContainer;
-                        if (config.checkForOwner)
+                        if (storageContainer.OwnerID != player.userID)
                         {
-                            if (storageContainer.OwnerID != player.userID)
+                            if (config.checkForOwner)
                                 continue;
+                            if (config.checkForFriends)
+                            {
+                                if (!(bool)Friends?.Call("AreFriends", player.userID, storageContainer.OwnerID))
+                                    continue;
+                            }
+                            if (config.checkForClans)
+                            {
+                                string clantag = Clans?.Call("GetClanOf", storageContainer.OwnerID) as string;
+                                if (clantag == null)
+                                    continue;
+                                JObject clan = Clans?.Call("GetClan", clantag) as JObject;
+                                if (clan == null)
+                                    continue;
+                                JArray members = clan["members"] as JArray;
+                                if (members == null)
+                                    continue;
+                                if (!members.Contains(player.UserIDString))
+                                    continue;  
+                            }
                         }
                         if (storageContainer.PrefabName.Contains("cupboard") && !allPlayerSettings[player.userID].fromTC)
                             continue;
@@ -395,7 +461,27 @@ namespace Oxide.Plugins
             }
         }
         #endregion
-        
+
+        object CanBuild(Planner planner, Construction prefab, Construction.Target target)
+        {
+            if (!planner.CanAffordToPlace(prefab))
+            {
+                var player = planner.GetOwnerPlayer();
+                if (player == null)
+                    return null;
+                var itemCrafter = player.GetComponent<ItemCrafter>();
+                if (itemCrafter == null)
+                    return null;
+
+                var results = ScanItems(player, prefab.defaultGrade.costToBuild, 0);
+
+                var status = GiveItems(player, results, prefab.defaultGrade.costToBuild);
+
+                return status;
+            }
+            return null;
+        }
+
         private bool HasPerm(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permUse));
         private bool IsInBuildingZone(BasePlayer player) => (player.IsBuildingAuthed());
         private bool CanForcePull(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permForcePull));
