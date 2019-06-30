@@ -26,12 +26,12 @@ namespace Oxide.Plugins
                 { "NoPermission", "You don't have permission to use this." },
                 { "InvalidArg", "Invalid argument" },
                 { "MissingItem", "Missing <color=#ff0000>{0}</color>!" },
-                { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller - <color=#32CD32>{0}</color>\nAutocraft - <color=#32CD32>{1}</color>\nFrom Toolcupboard - <color=#32CD32>{2}</color>\nForce Pulling - <color=#32CD32>{3}</color>" },
-                { "ForcePulled", "Item were force pulled <color=#7FFF00>sucessfully</color>!" },
+                { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller - {0}\nAutocraft - {1}\nFrom Toolcupboard -{2}\nForce Pulling - {3}" },
+                { "ForcePulled", "Items were force pulled <color=#7FFF00>sucessfully</color>!" },
                 { "ItemsPulled", "Items were moved <color=#7FFF00>successfully</color>!" },
                 { "NotInBuildingZone", "You need to be in building priviledge zone to use item puller!" },
                 { "PlayerFull", "Cannot pull items, inventory full!" },
-                { "Help", "<color=#00AAFF>Item Puller Help:</color>\n<color=#32CD32>/ip</color> - toggle item puller on/off\n<color=#32CD32>/ip <autocraft></color> - toggle autocraft on/off\n<color=#32CD32>/ip <fromtc></color> - toggle tool cupboard pulling on/off\n<color=#32CD32>/ip <fp></color> - toggle force pulling on/off\n<color=#32CD32>/ip <settings></color> - show current settings" },
+                { "Help", "<color=#00AAFF>Item Puller Help:</color>\n<color=#32CD32>/ip</color> - toggle item puller on/off\n<color=#7FFF00>/ip <autocraft></color> - toggle autocraft on/off\n<color=#7FFF00>/ip <fromtc></color> - toggle tool cupboard pulling on/off\n<color=#7FFF00>/ip <fp></color> - toggle force pulling on/off\n<color=#7FFF00>/ip <settings></color> - show current settings" },
                 { "toggleon", "<color=#7FFF00>Activated</color> Item Puller" },
                 { "toggleoff", "<color=#ff0000>Disabled</color> Item Puller" },
                 { "fromTCon", "<color=#7FFF00>Activated</color> Item Pulling from Tool Cupboard" },
@@ -133,40 +133,48 @@ namespace Oxide.Plugins
             if (config.checkForClans && (!Clans || !Clans.IsLoaded))
                 PrintWarning(lang.GetMessage("Missing Clans", this));
         }
-        private void OnPlayerInit(BasePlayer player) { CreatePlayerSettings(player); SaveData(); }
-
+        object OnMessagePlayer(string message, BasePlayer player)
+        {
+            if (message == "Can't afford to place!" && allPlayerSettings[player.userID].enabled)
+                return true;
+            return null;
+        }
         object CanCraft(ItemCrafter itemCrafter, ItemBlueprint bp, int amount)
         {
             var player = itemCrafter.GetComponent<BasePlayer>();
             if (!allPlayerSettings[player.userID].enabled)
                 return null;
+            if (player == null)
+                return null;
+            if (CheckPermissions(player) == null)
+                return null;
 
-            if (player != null)
-            {
-                if (!IsInBuildingZone(player) && !allPlayerSettings[player.userID].fp)
-                {
-                    player.ChatMessage(string.Format(lang.GetMessage("NotInBuildingZone", this, player.UserIDString)));
-                    return null;
-                }
-                if (!HasPerm(player))
-                {
-                    player.ChatMessage(string.Format(lang.GetMessage("NoPermissions", this, player.UserIDString)));
-                    return null;
-                }
-                if (IsFull(player))
-                {
-                    player.ChatMessage(string.Format(lang.GetMessage("PlayerFull", this, player.UserIDString)));
-                    return null;
-                }
+            Results results = ScanItems(player, bp.ingredients, amount);
 
-                Results results = ScanItems(player, bp.ingredients, amount);
+            object status = GiveItems(player, results, bp.ingredients);
 
-                object status = GiveItems(player, results, bp.ingredients);
-
-                return status;
-            }
-            return null;
+            return status;
         }
+        object CanAffordToPlace(Planner planner, Construction construction)
+        {
+            var player = planner.GetOwnerPlayer();
+            if (player == null)
+                return null;
+            if (!allPlayerSettings[player.userID].enabled)
+                return null;
+            var itemCrafter = player.GetComponent<ItemCrafter>();
+            if (itemCrafter == null)
+                return null;
+            if (CheckPermissions(player) == null)
+                return null;
+
+            Results results = ScanItems(player, construction.defaultGrade.costToBuild, 1);
+
+            object status = GiveItems(player, results, construction.defaultGrade.costToBuild);
+
+            return status;
+        }
+        private void OnPlayerInit(BasePlayer player) { CreatePlayerSettings(player); SaveData(); }
         #endregion
 
         #region Methods
@@ -352,7 +360,25 @@ namespace Oxide.Plugins
             else
                 return true;
         }
-
+        object CheckPermissions(BasePlayer player)
+        {
+            if (!IsInBuildingZone(player) && !allPlayerSettings[player.userID].fp)
+            {
+                player.ChatMessage(string.Format(lang.GetMessage("NotInBuildingZone", this, player.UserIDString)));
+                return null;
+            }
+            if (!HasPerm(player))
+            {
+                player.ChatMessage(string.Format(lang.GetMessage("NoPermissions", this, player.UserIDString)));
+                return null;
+            }
+            if (IsFull(player))
+            {
+                player.ChatMessage(string.Format(lang.GetMessage("PlayerFull", this, player.UserIDString)));
+                return null;
+            }
+            return true;
+        }
         private bool IsEnabled(BasePlayer player) { return allPlayerSettings[player.userID].enabled; }
         private bool IsAutocraft(BasePlayer player) { return allPlayerSettings[player.userID].autocraft; }
         private bool IsFromTC(BasePlayer player) { return allPlayerSettings[player.userID].fromTC; }
@@ -451,8 +477,8 @@ namespace Oxide.Plugins
                         ChangeEnabled(player, "fp");
                         break;
                     case "settings":
-                        var ps = allPlayerSettings[player.userID];
-                        player.ChatMessage(string.Format(lang.GetMessage("Settings", this, player.UserIDString), ps.enabled, ps.autocraft, ps.fromTC, ps.fp));
+                        var ps = allPlayerSettings[player.userID];                  
+                        player.ChatMessage(string.Format(lang.GetMessage("Settings", this, player.UserIDString), GetOptionFormatted(ps.enabled), GetOptionFormatted(ps.autocraft), GetOptionFormatted(ps.fromTC), GetOptionFormatted(ps.fp)));
                         break;
                     default:
                         player.ChatMessage(string.Format(lang.GetMessage("InvalidArg", this, player.UserIDString)));
@@ -460,27 +486,14 @@ namespace Oxide.Plugins
                 }
             }
         }
-        #endregion
-
-        object CanBuild(Planner planner, Construction prefab, Construction.Target target)
+        string GetOptionFormatted(bool option)
         {
-            if (!planner.CanAffordToPlace(prefab))
-            {
-                var player = planner.GetOwnerPlayer();
-                if (player == null)
-                    return null;
-                var itemCrafter = player.GetComponent<ItemCrafter>();
-                if (itemCrafter == null)
-                    return null;
-
-                var results = ScanItems(player, prefab.defaultGrade.costToBuild, 0);
-
-                var status = GiveItems(player, results, prefab.defaultGrade.costToBuild);
-
-                return status;
-            }
-            return null;
+            if (option)
+                return "<color=#7FFF00>Activated</color>";
+            else
+                return "<color=#ff0000>Disabled</color>";
         }
+        #endregion
 
         private bool HasPerm(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permUse));
         private bool IsInBuildingZone(BasePlayer player) => (player.IsBuildingAuthed());
