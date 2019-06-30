@@ -192,9 +192,7 @@ namespace Oxide.Plugins
         {
             var results = new Results();
 
-            var transferItems = new Dictionary<Item, int>();
             var hasIngredient = new List<ItemAmount>();
-            int check = 0;
 
             var itemCrafter = player.GetComponent<ItemCrafter>();
             if (itemCrafter == null)
@@ -204,7 +202,7 @@ namespace Oxide.Plugins
             {
                 if (HasIngredient(itemCrafter, itemAmount, amount))
                 {
-                    check++;
+                    results.check++;
                     hasIngredient.Add(itemAmount);
                     if (hasIngredient.Count >= ingredients.Count)
                     {
@@ -223,9 +221,9 @@ namespace Oxide.Plugins
                         var possibleItems = GetUsableItems(player, itemAmount.itemid, required);
                         if (possibleItems != null)
                         {
-                            check++;
+                            results.check++;
                             foreach (var Item in possibleItems)
-                                transferItems.Add(Item.Key, Item.Value);
+                                results.transferItems.Add(Item.Key, Item.Value);
                         }
                         else
                         {
@@ -237,8 +235,6 @@ namespace Oxide.Plugins
                         ForceUsableItem(itemCrafter, itemAmount.itemid, required);
                 }
             }
-            results.transferItems = transferItems;
-            results.check = check;
             return results;
         }
         object GiveItems(BasePlayer player, Results results, List<ItemAmount> ingredients)
