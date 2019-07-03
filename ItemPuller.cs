@@ -26,7 +26,7 @@ namespace Oxide.Plugins
                 { "NoPermission", "You don't have permission to use this." },
                 { "InvalidArg", "Invalid argument" },
                 { "MissingItem", "Missing <color=#ff0000>{0}</color>!" },
-                { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller - {0}\nAutocraft - {1}\nFrom Toolcupboard -{2}\nForce Pulling - {3}" },
+                { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller: {0}\nAutocraft: {1}\nFrom Toolcupboard: {2}\nForce Pulling: {3}" },
                 { "ForcePulled", "Items were force pulled <color=#7FFF00>sucessfully</color>!" },
                 { "ItemsPulled", "Items were moved <color=#7FFF00>successfully</color>!" },
                 { "NotInBuildingZone", "You need to be in building priviledge zone to use item puller!" },
@@ -157,11 +157,8 @@ namespace Oxide.Plugins
 
             return status;
         }
-        object CanAffordToPlace(Planner planner, Construction construction)
+        object CanAffordToPlace(BasePlayer player, Planner planner, Construction construction)
         {
-            var player = planner.GetOwnerPlayer();
-            if (player == null)
-                return null;
             if (!allPlayerSettings[player.userID].enabled)
                 return null;
             var itemCrafter = player.GetComponent<ItemCrafter>();
