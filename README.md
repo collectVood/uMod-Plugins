@@ -25,6 +25,6 @@
 }
 ```
 
-# Credits
+## Credits
 
 * **PsychoTea** Original Author
