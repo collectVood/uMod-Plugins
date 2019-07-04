@@ -37,7 +37,7 @@ The **Check for Owner** is for everyone that wants to go the save route and only
 
 The **Player Default Settings** are the settings each player will get by default. That doesn't mean that he cannot change his setting though if one is disabled in the default player setting.
 
-### Showcase
+## Showcase
 Plugin showcase video: https://youtu.be/BvLSaTXvKmg
 
 ## Credits
