@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.0.5")]
+    [Info("Item Puller", "collect_vood", "1.1.0")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : RustPlugin
     {
