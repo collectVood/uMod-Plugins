@@ -34,7 +34,7 @@ namespace Oxide.Plugins
                 { "ItemsPulled", "Items were moved <color=#7FFF00>successfully</color>!" },
                 { "NotInBuildingZone", "You need to be in building priviledge zone to use item puller!" },
                 { "PlayerFull", "Cannot pull items, inventory full!" },
-                { "Help", "<color=#00AAFF>Item Puller Help:</color>\n<color=#32CD32>/ip</color> - toggle item puller on/off\n<color=#7FFF00>/ip <autocraft></color> - toggle autocraft on/off\n<color=#7FFF00>/ip <fromtc></color> - toggle tool cupboard pulling on/off\n<color=#7FFF00>/ip <fp></color> - toggle force pulling on/off\n<color=#7FFF00>/ip <settings></color> - show current settings" },
+                { "Help", "<color=#00AAFF>Item Puller Help:</color>\n<color=#7FFF00>/ip</color> - toggle item puller on/off\n<color=#7FFF00>/ip <autocraft></color> - toggle autocraft on/off\n<color=#7FFF00>/ip <fromtc></color> - toggle tool cupboard pulling on/off\n<color=#7FFF00>/ip <fp></color> - toggle force pulling on/off\n<color=#7FFF00>/ip <settings></color> - show current settings" },
                 { "toggleon", "<color=#7FFF00>Activated</color> Item Puller" },
                 { "toggleoff", "<color=#ff0000>Disabled</color> Item Puller" },
                 { "fromTCon", "<color=#7FFF00>Activated</color> Item Pulling from Tool Cupboard" },
@@ -53,15 +53,14 @@ namespace Oxide.Plugins
         {
             [JsonProperty("Command")]
             public string Command = "ip";
-
             [JsonProperty("Pull on build")]
             public bool pullOnBuild = true;
-
-            [JsonProperty("Check for Owner (save mode)")]
+            [JsonProperty("Check for Owner")]
             public bool checkForOwner = false;
+            [JsonProperty("Check for Friend")]
             public bool checkForFriends = false;
+            [JsonProperty("Check for Clan")]
             public bool checkForClans = false;
-
             [JsonProperty(PropertyName = "Player Default Settings", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public Dictionary<string, bool> PlayerDefaultSettings = new Dictionary<string, bool>
             {
