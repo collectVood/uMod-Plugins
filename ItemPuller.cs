@@ -3,27 +3,30 @@ using Oxide.Core;
 using Oxide.Core.Plugins;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
     [Info("Item Puller", "collect_vood", "1.1.0")]
     [Description("Gives you the ability to pull items from containers")]
-    class ItemPuller : RustPlugin
+    class ItemPuller : CovalencePlugin
     {
         [PluginReference]
         private Plugin Friends, Clans;
 
+        #region Constants
         const string permUse = "itempuller.use";
         const string permForcePull = "itempuller.forcepull";
+        const string permBuildPull = "itempuller.buildpull";
+        #endregion
 
         #region Lang
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
-                { "Missing Friends", "You are missing the Friends API plugin (check for Friends won't work)" },
-                { "Missing Clans", "You are missing the Clans plugin (check for Clans won't work)" },
                 { "NoPermission", "You don't have permission to use this." },
+                { "NoPermissionBuild", "You don't have permission to use build pull." },
                 { "InvalidArg", "Invalid argument" },
                 { "MissingItem", "Missing <color=#ff0000>{0}</color>!" },
                 { "Settings", "<color=#00AAFF>Item Puller Settings:</color>\nItem Puller: {0}\nAutocraft: {1}\nFrom Toolcupboard: {2}\nForce Pulling: {3}" },
@@ -48,12 +51,18 @@ namespace Oxide.Plugins
         private Configuration config;
         private class Configuration
         {
+            [JsonProperty("Command")]
+            public string Command = "ip";
+
+            [JsonProperty("Pull on build")]
+            public bool pullOnBuild = true;
+
             [JsonProperty("Check for Owner (save mode)")]
             public bool checkForOwner = false;
             public bool checkForFriends = false;
             public bool checkForClans = false;
 
-            [JsonProperty(PropertyName = "Player Default Settings")]
+            [JsonProperty(PropertyName = "Player Default Settings", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public Dictionary<string, bool> PlayerDefaultSettings = new Dictionary<string, bool>
             {
                 { "Enabled", false },
@@ -72,6 +81,7 @@ namespace Oxide.Plugins
         {
             base.LoadConfig();
             config = Config.ReadObject<Configuration>();
+            SaveConfig();
         }
         protected override void SaveConfig() => Config.WriteObject(config);
         #endregion
@@ -95,10 +105,10 @@ namespace Oxide.Plugins
         {
             Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
         }
-        private void OnServerSave()
-        {
-            SaveData();
-        }
+
+        private void OnServerSave() => SaveData();
+        private void Unload() => SaveData();
+
         private void CreatePlayerSettings(BasePlayer player)
         {
             if (!allPlayerSettings.ContainsKey(player.userID))
@@ -119,19 +129,21 @@ namespace Oxide.Plugins
         {
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
 
-            foreach (var player in Player.Players)
+            foreach (var player in BasePlayer.activePlayerList)
                 CreatePlayerSettings(player);
-                SaveData();
-            
+
+            AddCovalenceCommand(config.Command, nameof(ItemPullerChatCommand));
+
             permission.RegisterPermission(permUse, this);
             permission.RegisterPermission(permForcePull, this);
+            permission.RegisterPermission(permBuildPull, this);
         }
         private void Loaded()
         {
             if (config.checkForFriends && (!Friends || !Friends.IsLoaded))
-                PrintWarning(lang.GetMessage("Missing Friends", this));
+                PrintWarning("You are missing the Friends API plugin(check for Friends won't work)");
             if (config.checkForClans && (!Clans || !Clans.IsLoaded))
-                PrintWarning(lang.GetMessage("Missing Clans", this));
+                PrintWarning("You are missing the Clans plugin(check for Clans won't work)");
         }
         object OnMessagePlayer(string message, BasePlayer player)
         {
@@ -159,12 +171,12 @@ namespace Oxide.Plugins
         }
         object CanAffordToPlace(BasePlayer player, Planner planner, Construction construction)
         {
-            if (!allPlayerSettings[player.userID].enabled)
+            if (!config.pullOnBuild || !allPlayerSettings[player.userID].enabled)
                 return null;
             var itemCrafter = player.GetComponent<ItemCrafter>();
             if (itemCrafter == null)
                 return null;
-            if (CheckPermissions(player) == null)
+            if (CheckPermissions(player, true) == null)
                 return null;
 
             Results results = ScanItems(player, construction.defaultGrade.costToBuild, 1);
@@ -173,10 +185,58 @@ namespace Oxide.Plugins
 
             return status;
         }
-        private void OnPlayerInit(BasePlayer player) { CreatePlayerSettings(player); SaveData(); }
+        private void OnPlayerInit(BasePlayer player) { CreatePlayerSettings(player); }
         #endregion
 
-        #region Methods
+        #region Commands
+        void ItemPullerChatCommand(IPlayer player, string cmd, string[] args)
+        {
+            BasePlayer bPlayer;
+            if ((bPlayer = player.Object as BasePlayer) == null)
+                return;
+            if (!(args.Length > 0))
+            { 
+                ChangeEnabled(bPlayer, "enabled");
+                return;
+            }
+            else
+            {
+                switch (args[0].ToLower())
+                {
+                    case "help":
+                        player.Reply(string.Format(lang.GetMessage("Help", this, player.Id)));
+                        break;
+                    case "ac":
+                    case "autocraft":
+                        ChangeEnabled(bPlayer, "autocraft");
+                        break;
+                    case "fromtc":
+                        ChangeEnabled(bPlayer, "fromtc");
+                        break;
+                    case "fp":
+                    case "forcepull":
+                        ChangeEnabled(bPlayer, "fp");
+                        break;
+                    case "settings":
+                        var ps = allPlayerSettings[bPlayer.userID];                  
+                        player.Reply(string.Format(lang.GetMessage("Settings", this, player.Id), GetOptionFormatted(ps.enabled), GetOptionFormatted(ps.autocraft), GetOptionFormatted(ps.fromTC), GetOptionFormatted(ps.fp)));
+                        break;
+                    default:
+                        player.Reply(string.Format(lang.GetMessage("InvalidArg", this, player.Id)));
+                        break;
+                }
+            }
+        }
+        string GetOptionFormatted(bool option)
+        {
+            if (option)
+                return "<color=#7FFF00>Activated</color>";
+            else
+                return "<color=#ff0000>Disabled</color>";
+        }
+        #endregion
+
+        #region Helpers
 
         class Results
         {
@@ -285,12 +345,12 @@ namespace Oxide.Plugins
                         {
                             if (config.checkForOwner)
                                 continue;
-                            if (config.checkForFriends)
+                            if (config.checkForFriends && Friends != null && Friends.IsLoaded)
                             {
                                 if (!(bool)Friends?.Call("AreFriends", player.userID, storageContainer.OwnerID))
                                     continue;
                             }
-                            if (config.checkForClans)
+                            if (config.checkForClans && Clans != null && Clans.IsLoaded)
                             {
                                 string clantag = Clans?.Call("GetClanOf", storageContainer.OwnerID) as string;
                                 if (clantag == null)
@@ -302,7 +362,7 @@ namespace Oxide.Plugins
                                 if (members == null)
                                     continue;
                                 if (!members.Contains(player.UserIDString))
-                                    continue;  
+                                    continue;
                             }
                         }
                         if (storageContainer.PrefabName.Contains("cupboard") && !allPlayerSettings[player.userID].fromTC)
@@ -333,7 +393,7 @@ namespace Oxide.Plugins
                     return null;
             }
             return null;
-        }      
+        }
         private bool IsFull(BasePlayer player)
         {
             if (player.inventory.containerMain.IsFull() && player.inventory.containerBelt.IsFull())
@@ -355,16 +415,21 @@ namespace Oxide.Plugins
             else
                 return true;
         }
-        object CheckPermissions(BasePlayer player)
+        object CheckPermissions(BasePlayer player, bool OnBuild = false)
         {
             if (!IsInBuildingZone(player) && !allPlayerSettings[player.userID].fp)
             {
                 player.ChatMessage(string.Format(lang.GetMessage("NotInBuildingZone", this, player.UserIDString)));
                 return null;
             }
-            if (!HasPerm(player))
+            if (!HasPerm(player, permUse))
             {
-                player.ChatMessage(string.Format(lang.GetMessage("NoPermissions", this, player.UserIDString)));
+                player.ChatMessage(string.Format(lang.GetMessage("NoPermission", this, player.UserIDString)));
+                return null;
+            }
+            if (OnBuild && !HasPerm(player, permBuildPull))
+            {
+                player.ChatMessage(string.Format(lang.GetMessage("NoPermissionBuild", this, player.UserIDString)));
                 return null;
             }
             if (IsFull(player))
@@ -388,12 +453,12 @@ namespace Oxide.Plugins
                     {
                         allPlayerSettings[player.userID].enabled = false;
                         player.ChatMessage(string.Format(lang.GetMessage("toggleoff", this, player.UserIDString)));
-                    }                    
+                    }
                     else
                     {
                         allPlayerSettings[player.userID].enabled = true;
                         player.ChatMessage(string.Format(lang.GetMessage("toggleon", this, player.UserIDString)));
-                    }                        
+                    }
                     break;
                 case "autocraft":
                     if (IsAutocraft(player))
@@ -440,59 +505,12 @@ namespace Oxide.Plugins
                         break;
                     }
             }
-            SaveData();
         }
-        #endregion
 
-        #region Commands
-        [ChatCommand("ip")]
-        void ItemPullerChatCommand(BasePlayer player, string cmd, string[] args)
-        {
-            if (!(args.Length > 0))
-            { 
-                ChangeEnabled(player, "enabled");
-                return;
-            }
-            else
-            {
-                switch (args[0].ToLower())
-                {
-                    case "help":
-                        player.ChatMessage(string.Format(lang.GetMessage("Help", this, player.UserIDString)));
-                        break;
-                    case "ac":
-                    case "autocraft":
-                        ChangeEnabled(player, "autocraft");
-                        break;
-                    case "fromtc":
-                        ChangeEnabled(player, "fromtc");
-                        break;
-                    case "fp":
-                    case "forcepull":
-                        ChangeEnabled(player, "fp");
-                        break;
-                    case "settings":
-                        var ps = allPlayerSettings[player.userID];                  
-                        player.ChatMessage(string.Format(lang.GetMessage("Settings", this, player.UserIDString), GetOptionFormatted(ps.enabled), GetOptionFormatted(ps.autocraft), GetOptionFormatted(ps.fromTC), GetOptionFormatted(ps.fp)));
-                        break;
-                    default:
-                        player.ChatMessage(string.Format(lang.GetMessage("InvalidArg", this, player.UserIDString)));
-                        break;
-                }
-            }
-        }
-        string GetOptionFormatted(bool option)
-        {
-            if (option)
-                return "<color=#7FFF00>Activated</color>";
-            else
-                return "<color=#ff0000>Disabled</color>";
-        }
-        #endregion
-
-        private bool HasPerm(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permUse));
+        private bool HasPerm(BasePlayer player, string perm) => (permission.UserHasPermission(player.UserIDString, perm));
         private bool IsInBuildingZone(BasePlayer player) => (player.IsBuildingAuthed());
         private bool CanForcePull(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permForcePull));
+        #endregion
     }
 }
 

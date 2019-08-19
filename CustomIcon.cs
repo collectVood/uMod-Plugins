@@ -1,52 +1,63 @@
-﻿namespace Oxide.Plugins
+﻿using Network;
+using Newtonsoft.Json;
+
+namespace Oxide.Plugins
 {
-    [Info("Custom Icon", "collect_vood", "0.0.1")]
-    [Description("Set a customizable icon for all server/plugin messages")]
+    [Info("Custom Icon", "collect_vood", "1.0.1")]
+    [Description("Set a customizable icon for all non user messages")]
 
-    class CustomIcon : RustPlugin
+    class CustomIcon : CovalencePlugin
     {
-        private void SendMessage(BasePlayer player, string message) =>
-            player.SendConsoleCommand("chat.add", 76561198965214956, message);
-
-        object OnServerCommand(ConsoleSystem.Arg arg)
+        #region Config
+        private Configuration config;
+        private class Configuration
         {
-            Puts("OnServerCommand works!");
-            return null;
+            [JsonProperty(PropertyName = "Steam Avatar User ID")]
+            public ulong SteamAvatarUserID = 0;
         }
-        private object OnServerMessage(string message, string name)
+        protected override void LoadDefaultConfig()
         {
-            if (message.Contains("gave") && name == "SERVER")
+            PrintWarning("Creating a new configuration file");
+            config = new Configuration();
+        }
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            config = Config.ReadObject<Configuration>();
+            SaveConfig();
+        }
+        protected override void SaveConfig() => Config.WriteObject(config);
+        #endregion
+
+        #region Hooks
+        object[] OnBroadcastCommand(string command, object[] args)
+        {
+            if (args != null && config != null)
             {
-                foreach (BasePlayer player in Player.Players)
-                    SendMessage(player, name + " " + message);
-                
-                return true;
+                if (args.Length > 0 && command == "chat.add")
+                {
+                    if (args[0].ToString() == "0")
+                    {
+                        args[0] = config.SteamAvatarUserID;
+                    }
+                }
             }
-            return null;
+            return args;
         }
-        object OnPlayerCommand(ConsoleSystem.Arg arg)
+        object[] OnSendCommand(Connection connection, string command, params object[] args)
         {
-            Puts("OnPlayerCommand works!");
-            return null;
+            if (args != null && config != null)
+            {
+                if (args.Length > 0 && command == "chat.add")
+                {
+                    if (args[0].ToString() == "0")
+                    {
+                        args[0] = config.SteamAvatarUserID;
+                    }
+                }
+            }
+            return args;
         }
-        object OnUserCommand(BasePlayer player)
-        {
-            Puts("OnUserCommand works");
-            return null;
-        }
-        object OnMessagePlayer(string message, BasePlayer player)
-        {
-            Puts("OnMessagePlayer works!");
-
-            SendMessage(player, message);
-            return true;
-        }
-        [ChatCommand("t")]
-        void TestCommand(BasePlayer player, string cmd, string[] args)
-        {
-            player.ChatMessage("Test!");
-            player.IPlayer.Reply("2Test!");
-            Server.Broadcast("A server broadcast");
-        }
+        #endregion
     }
 }
