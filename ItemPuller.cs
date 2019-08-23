@@ -194,7 +194,7 @@ namespace Oxide.Plugins
             if ((bPlayer = player.Object as BasePlayer) == null)
                 return;
             if (!(args.Length > 0))
-            { 
+            {
                 ChangeEnabled(bPlayer, "enabled");
                 return;
             }
@@ -217,7 +217,7 @@ namespace Oxide.Plugins
                         ChangeEnabled(bPlayer, "fp");
                         break;
                     case "settings":
-                        var ps = allPlayerSettings[bPlayer.userID];                  
+                        var ps = allPlayerSettings[bPlayer.userID];
                         player.Reply(string.Format(lang.GetMessage("Settings", this, player.Id), GetOptionFormatted(ps.enabled), GetOptionFormatted(ps.autocraft), GetOptionFormatted(ps.fromTC), GetOptionFormatted(ps.fp)));
                         break;
                     default:
