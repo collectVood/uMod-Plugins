@@ -121,8 +121,8 @@ namespace Oxide.Plugins
         private void Unload()
         {
             SaveData();
-            foreach (BasePlayer player in uiEnabled)
-                DestroyUi(player);
+            for (int i = 0; i < uiEnabled.Count; i++)
+                DestroyUi(uiEnabled[i]);
         }
 
         private void CreatePlayerSettings(BasePlayer player)
