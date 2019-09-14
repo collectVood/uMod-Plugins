@@ -4,20 +4,23 @@ using Oxide.Core.Plugins;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Game.Rust.Cui;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.1.0")]
+    [Info("Item Puller", "collect_vood", "1.2.0")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : CovalencePlugin
     {
         [PluginReference]
         private Plugin Friends, Clans;
 
-        #region Constants
+        #region Constants + other variables
         const string permUse = "itempuller.use";
         const string permForcePull = "itempuller.forcepull";
         const string permBuildPull = "itempuller.buildpull";
+        List<BasePlayer> uiEnabled = new List<BasePlayer>();
         #endregion
 
         #region Lang
@@ -42,7 +45,13 @@ namespace Oxide.Plugins
                 { "autocrafton", "<color=#7FFF00>Activated</color> Item Puller auto crafting" },
                 { "autocraftoff", "<color=#ff0000>Disabled</color> Item Puller auto crafting" },
                 { "fpon", "<color=#7FFF00>Activated</color> Item force pulling" },
-                { "fpoff", "<color=#ff0000>Disabled</color> Item force pulling" }
+                { "fpoff", "<color=#ff0000>Disabled</color> Item force pulling" },
+                { "uiturnon", "Turn on"},
+                { "uiturnoff", "Turn off"},
+                { "uititle", "Item Puller"},
+                { "uiitempulleroption", "Item Puller"},
+                { "uiautocraftoption", "Autocraft"},
+                { "uifromtcoption", "Pull from TC"}
             }, this);
         }
         #endregion
@@ -69,7 +78,10 @@ namespace Oxide.Plugins
                 { "Pull from ToolCupboard", true },
                 { "Force Pull (recommend to not set true)", false }
             };
-
+            [JsonProperty(PropertyName = "Ui Enabled")]
+            public bool useUi = true;
+            [JsonProperty(PropertyName = "Ui Position")]
+            public Vector2 UiPosition { get; set; } = new Vector2(0.6505f, 0.022f);
         }
         protected override void LoadDefaultConfig()
         {
@@ -106,7 +118,12 @@ namespace Oxide.Plugins
         }
 
         private void OnServerSave() => SaveData();
-        private void Unload() => SaveData();
+        private void Unload()
+        {
+            SaveData();
+            foreach (BasePlayer player in uiEnabled)
+                DestroyUi(player);
+        }
 
         private void CreatePlayerSettings(BasePlayer player)
         {
@@ -184,6 +201,11 @@ namespace Oxide.Plugins
 
             return status;
         }
+        void OnPlayerDisconnected(BasePlayer player, string reason)
+        {
+            if (uiEnabled.Contains(player))
+                uiEnabled.Remove(player);
+        }
         private void OnPlayerInit(BasePlayer player) { CreatePlayerSettings(player); }
         #endregion
 
@@ -235,8 +257,240 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        #region Helpers
+        #region UI
+        private void OnLootEntity(BasePlayer player, BaseEntity entity)
+        {
+            var boxStorage = entity as BoxStorage;
 
+            if (boxStorage == null || !HasPerm(player, permUse))
+                return;
+
+            if (config.useUi)
+                CreateUi(player);           
+        }
+
+        private void OnLootEntityEnd(BasePlayer player, BaseCombatEntity entity)
+        {
+            var boxStorage = entity as BoxStorage;
+
+            if (boxStorage == null || !HasPerm(player, permUse))
+                return;
+
+            if (config.useUi)
+                DestroyUi(player);
+        }
+        string ToggleButtonColor(bool Enabled)
+        {
+            string toggleButtonColor = !Enabled
+                            ? "0.415 0.5 0.258 0.4"
+                            : "0.8 0.254 0.254 0.4";
+            return toggleButtonColor;
+        }
+        string ToggleButtonTextColor(bool Enabled)
+        {
+            string toggleButtonTextColor = !Enabled
+                                            ? "0.607 0.705 0.431"
+                                            : "0.705 0.607 0.431";
+            return toggleButtonTextColor;
+        }
+        private CuiElementContainer CreateUi(BasePlayer player)
+        {
+            PlayerSettings settings = allPlayerSettings[player.userID];
+            
+            if (uiEnabled.Contains(player))
+                DestroyUi(player);
+            else
+                uiEnabled.Add(player);
+
+            Vector2 uiPosition = config.UiPosition;
+            Vector2 uiSize = new Vector2(0.1785f, 0.111f);
+
+            CuiElementContainer result = new CuiElementContainer();
+            string rootPanelName = result.Add(new CuiPanel
+            {
+                Image = new CuiImageComponent
+                {
+                    Color = "0 0 0 0"
+                },
+                RectTransform =
+                {
+                    AnchorMin = uiPosition.x + " " + uiPosition.y,
+                    AnchorMax = uiPosition.x + uiSize.x + " " + (uiPosition.y + uiSize.y)
+                }
+            }, "Overlay", "ItemPullerUi");
+
+            string headerPanel = result.Add(new CuiPanel
+            {
+                Image = new CuiImageComponent
+                {
+                    Color = "0.75 0.75 0.75 0.1"
+                },
+                RectTransform =
+                {
+                    AnchorMin = "0 0.775",
+                    AnchorMax = "1 1"
+                }
+            }, rootPanelName);
+
+            // Header label
+            result.Add(new CuiLabel
+            {
+                RectTransform =
+                {
+                    AnchorMin = "0.051 0",
+                    AnchorMax = "1 0.95"
+                },
+                Text =
+                {
+                    Text = lang.GetMessage("uititle", this, player.UserIDString),
+                    Align = TextAnchor.MiddleLeft,
+                    Color = "0.77 0.7 0.7 1",
+                    FontSize = 13
+                }
+            }, headerPanel);
+
+            string contentPanel = result.Add(new CuiPanel
+            {
+                Image = new CuiImageComponent
+                {
+                    Color = "0.65 0.65 0.65 0.06"
+                },
+                RectTransform =
+                {
+                    AnchorMin = "0 0",
+                    AnchorMax = "1 0.74"
+                }
+            }, rootPanelName);
+
+            // Toggle button
+            result.Add(new CuiButton
+            {
+                RectTransform =
+                {
+                    AnchorMin = "0.022 0.676",
+                    AnchorMax = "0.25 0.964"
+                },
+                Button =
+                {
+                    Command = $"{config.Command}",
+                    Color = ToggleButtonColor(settings.enabled)
+                },
+                Text =
+                {
+                    Align = TextAnchor.MiddleCenter,
+                    Text = settings.enabled ? lang.GetMessage("uiturnoff", this, player.UserIDString) : lang.GetMessage("uiturnon", this, player.UserIDString),
+                    Color = ToggleButtonTextColor(settings.enabled),
+                    FontSize = 11
+                }
+            }, contentPanel);
+            //Autocraft
+            result.Add(new CuiButton
+            {
+                RectTransform =
+                {
+                    AnchorMin = "0.022 0.353",
+                    AnchorMax = "0.25 0.64"
+                },
+                Button =
+                {
+                    Command = $"{config.Command} autocraft",
+                    Color = ToggleButtonColor(settings.autocraft)
+                },
+                Text =
+                {
+                    Align = TextAnchor.MiddleCenter,
+                    Text = settings.autocraft ? lang.GetMessage("uiturnoff", this, player.UserIDString) : lang.GetMessage("uiturnon", this, player.UserIDString),
+                    Color = ToggleButtonTextColor(settings.autocraft),
+                    FontSize = 11
+                }
+            }, contentPanel);
+            result.Add(new CuiButton
+            {
+                RectTransform =
+                {
+                    AnchorMin = "0.022 0.029",
+                    AnchorMax = "0.25 0.317"
+                },
+                Button =
+                {
+                    Command = $"{config.Command} fromtc",
+                    Color = ToggleButtonColor(settings.fromTC)
+                },
+                Text =
+                {
+                    Align = TextAnchor.MiddleCenter,
+                    Text = settings.fromTC ? lang.GetMessage("uiturnoff", this, player.UserIDString) : lang.GetMessage("uiturnon", this, player.UserIDString),
+                    Color = ToggleButtonTextColor(settings.fromTC),
+                    FontSize = 11
+                }
+            }, contentPanel);
+
+            // Explanations
+            result.Add(new CuiLabel
+            {
+                RectTransform =
+                {
+                    AnchorMin = "0.307 0.676",
+                    AnchorMax = "0.636 0.964"
+                },
+                Text =
+                {
+                    Text = lang.GetMessage("uiitempulleroption", this, player.UserIDString),
+                    Align = TextAnchor.MiddleLeft,
+                    Color = "0.77 0.7 0.7 1",
+                    FontSize = 11
+                }
+            }, contentPanel);
+            result.Add(new CuiLabel
+            {
+                RectTransform =
+                {
+                    AnchorMin = "0.307 0.353",
+                    AnchorMax = "0.636 0.64"
+                },
+                Text =
+                {
+                    Text = lang.GetMessage("uiautocraftoption", this, player.UserIDString),
+                    Align = TextAnchor.MiddleLeft,
+                    Color = "0.77 0.7 0.7 1",
+                    FontSize = 11
+                }
+            }, contentPanel);
+            result.Add(new CuiLabel
+            {
+                RectTransform =
+                {
+                    AnchorMin = "0.307 0.036",
+                    AnchorMax = "0.636 0.324"
+                },
+                Text =
+                {
+                    Text = lang.GetMessage("uifromtcoption", this, player.UserIDString),
+                    Align = TextAnchor.MiddleLeft,
+                    Color = "0.77 0.7 0.7 1",
+                    FontSize = 11
+                }
+            }, contentPanel);
+            
+            CuiHelper.AddUi(player, result);
+            return result;
+        }
+
+        private void DestroyUi(BasePlayer player)
+        {
+            if (uiEnabled.Contains(player))
+                uiEnabled.Remove(player);
+            CuiHelper.DestroyUi(player, "ItemPullerUi");
+        }
+
+        private void UpdateUi(BasePlayer player)
+        {
+            DestroyUi(player);
+            CreateUi(player);
+        }
+        #endregion
+
+        #region Helpers
         class Results
         {
             public bool hasResources = false;
@@ -504,6 +758,8 @@ namespace Oxide.Plugins
                         break;
                     }
             }
+            if (uiEnabled.Contains(player))
+                UpdateUi(player);
         }
 
         private bool HasPerm(BasePlayer player, string perm) => (permission.UserHasPermission(player.UserIDString, perm));
