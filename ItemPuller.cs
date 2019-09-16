@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.2.0")]
+    [Info("Item Puller", "collect_vood", "1.2.1")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : CovalencePlugin
     {
@@ -80,8 +80,12 @@ namespace Oxide.Plugins
             };
             [JsonProperty(PropertyName = "Ui Enabled")]
             public bool useUi = true;
-            [JsonProperty(PropertyName = "Ui Position")]
-            public Vector2 UiPosition { get; set; } = new Vector2(0.6505f, 0.022f);
+            [JsonProperty(PropertyName = "Global Ui Position")]
+            public Vector2 UiPosition = new Vector2(0.6505f, 0.022f);
+            [JsonProperty(PropertyName = "Custom Ui Positions Enabled")]
+            public bool CustomUiPosition = false;
+            [JsonProperty(PropertyName = "Custom Positions (Box wise)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public List<CustomOtherPositions> CustomOtherPositions = new List<CustomOtherPositions> { new CustomOtherPositions() };
         }
         protected override void LoadDefaultConfig()
         {
@@ -95,6 +99,14 @@ namespace Oxide.Plugins
             SaveConfig();
         }
         protected override void SaveConfig() => Config.WriteObject(config);
+
+        private class CustomOtherPositions
+        {
+            [JsonProperty(PropertyName = "Box Shortname")]
+            public string boxShortname = "entity.shortname";
+            [JsonProperty(PropertyName = "Ui Position")]
+            public Vector2 UiPosition { get; set; } = new Vector2(0.6505f, 0.022f);
+        }
         #endregion
 
         #region Data
@@ -266,7 +278,7 @@ namespace Oxide.Plugins
                 return;
 
             if (config.useUi)
-                CreateUi(player);           
+                CreateUi(player, entity);           
         }
 
         private void OnLootEntityEnd(BasePlayer player, BaseCombatEntity entity)
@@ -293,7 +305,7 @@ namespace Oxide.Plugins
                                             : "0.705 0.607 0.431";
             return toggleButtonTextColor;
         }
-        private CuiElementContainer CreateUi(BasePlayer player)
+        private CuiElementContainer CreateUi(BasePlayer player, BaseEntity entity)
         {
             PlayerSettings settings = allPlayerSettings[player.userID];
             
@@ -303,6 +315,18 @@ namespace Oxide.Plugins
                 uiEnabled.Add(player);
 
             Vector2 uiPosition = config.UiPosition;
+
+            if (config.CustomUiPosition && entity != null)
+            {
+                foreach (var customUiPos in config.CustomOtherPositions)
+                {
+                    if (customUiPos.boxShortname == entity.ShortPrefabName || (entity.ShortPrefabName == "woodbox_deployed" && customUiPos.boxShortname == "box.wooden"))
+                        uiPosition = customUiPos.UiPosition;
+                    else
+                        continue;
+                }
+            }
+
             Vector2 uiSize = new Vector2(0.1785f, 0.111f);
 
             CuiElementContainer result = new CuiElementContainer();
@@ -332,7 +356,6 @@ namespace Oxide.Plugins
                 }
             }, rootPanelName);
 
-            // Header label
             result.Add(new CuiLabel
             {
                 RectTransform =
@@ -362,7 +385,6 @@ namespace Oxide.Plugins
                 }
             }, rootPanelName);
 
-            // Toggle button
             result.Add(new CuiButton
             {
                 RectTransform =
@@ -383,7 +405,7 @@ namespace Oxide.Plugins
                     FontSize = 11
                 }
             }, contentPanel);
-            //Autocraft
+
             result.Add(new CuiButton
             {
                 RectTransform =
@@ -404,6 +426,7 @@ namespace Oxide.Plugins
                     FontSize = 11
                 }
             }, contentPanel);
+
             result.Add(new CuiButton
             {
                 RectTransform =
@@ -483,10 +506,10 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, "ItemPullerUi");
         }
 
-        private void UpdateUi(BasePlayer player)
+        private void UpdateUi(BasePlayer player, BaseEntity entity)
         {
             DestroyUi(player);
-            CreateUi(player);
+            CreateUi(player, entity);
         }
         #endregion
 
@@ -759,7 +782,13 @@ namespace Oxide.Plugins
                     }
             }
             if (uiEnabled.Contains(player))
-                UpdateUi(player);
+            {
+                BaseEntity entity = null;
+                if (player.inventory.loot.IsLooting())
+                    entity = player.inventory.loot.entitySource;
+                UpdateUi(player, entity);
+            }
+
         }
 
         private bool HasPerm(BasePlayer player, string perm) => (permission.UserHasPermission(player.UserIDString, perm));
