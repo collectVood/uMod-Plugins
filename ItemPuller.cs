@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.2.1")]
+    [Info("Item Puller", "collect_vood", "1.2.2")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : CovalencePlugin
     {
@@ -23,7 +23,7 @@ namespace Oxide.Plugins
         List<BasePlayer> uiEnabled = new List<BasePlayer>();
         #endregion
 
-        #region Lang
+        #region Localization
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
@@ -104,6 +104,8 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Box Shortname")]
             public string boxShortname = "entity.shortname";
+            [JsonProperty(PropertyName = "Disable Ui")]
+            public bool DisableUi = false;
             [JsonProperty(PropertyName = "Ui Position")]
             public Vector2 UiPosition { get; set; } = new Vector2(0.6505f, 0.022f);
         }
@@ -227,9 +229,14 @@ namespace Oxide.Plugins
             BasePlayer bPlayer;
             if ((bPlayer = player.Object as BasePlayer) == null)
                 return;
+            if (!HasPerm(bPlayer, permUse))
+            {
+                player.Reply(string.Format(lang.GetMessage("NoPermission", this, player.Id)));
+                return;
+            }
             if (!(args.Length > 0))
             {
-                ChangeEnabled(bPlayer, "enabled");
+                ChangeEnabled(bPlayer, "enable");
                 return;
             }
             else
@@ -321,7 +328,11 @@ namespace Oxide.Plugins
                 foreach (var customUiPos in config.CustomOtherPositions)
                 {
                     if (customUiPos.boxShortname == entity.ShortPrefabName || (entity.ShortPrefabName == "woodbox_deployed" && customUiPos.boxShortname == "box.wooden"))
+                    {
                         uiPosition = customUiPos.UiPosition;
+                        if (customUiPos.DisableUi)
+                            return null;
+                    }
                     else
                         continue;
                 }
@@ -724,7 +735,7 @@ namespace Oxide.Plugins
         {
             switch (setting)
             {
-                case "enabled":
+                case "enable":
                     if (IsEnabled(player))
                     {
                         allPlayerSettings[player.userID].enabled = false;

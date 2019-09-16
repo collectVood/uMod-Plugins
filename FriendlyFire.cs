@@ -7,14 +7,14 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Customizable Friendly Fire", "collect_vood", "1.0.2")]
+    [Info("Friendly Fire", "collect_vood", "1.0.4")]
     [Description("Gives you the ability to enable or disable friendly fire player based")]
-    class CustomizableFriendlyFire : CovalencePlugin
+    class FriendlyFire : CovalencePlugin
     {
         [PluginReference]
         private Plugin Friends;
 
-        #region Lang
+        #region Localization
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
@@ -113,17 +113,12 @@ namespace Oxide.Plugins
             IPlayer attacker = info.InitiatorPlayer.IPlayer;
             if (attacker == player.IPlayer)
                 return null;
-            if (!allPlayerSettings.ContainsKey(attacker.Id))
-                CreatePlayerSettings(attacker);
-            if (!allPlayerSettings.ContainsKey(player.UserIDString))
-                CreatePlayerSettings(player.IPlayer);
+            CreatePlayerSettings(attacker);
+            CreatePlayerSettings(player.IPlayer);
             if (!allPlayerSettings[attacker.Id].ff || !allPlayerSettings[player.UserIDString].ff)
             {
                 if (Friends == null || !Friends.IsLoaded)
-                {
-                    PrintWarning("You are missing the Friends API plugin (required plugin)");
                     return null;
-                }
                 if ((bool)Friends?.Call("AreFriendsS", attacker.Id, player.UserIDString))
                 {
                     if (!allPlayerSettings[attacker.Id].ff)
@@ -152,9 +147,8 @@ namespace Oxide.Plugins
                 player.Reply(GetMessage("CommandArguments", player));
                 return;
             }
-            if (!allPlayerSettings.ContainsKey(player.Id))
-                CreatePlayerSettings(player);
-            switch (args[0])
+            CreatePlayerSettings(player);
+            switch (args[0].ToLower())
             {
                 case "on":
                     if (allPlayerSettings[player.Id].ff == true)
