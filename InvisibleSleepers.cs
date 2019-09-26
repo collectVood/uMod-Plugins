@@ -4,7 +4,7 @@ using Oxide.Core.Plugins;
 using System.Collections.Generic;
 namespace Oxide.Plugins
 {
-    [Info("Invisible Sleepers", "collect_vood", "1.0.4")]
+    [Info("Invisible Sleepers", "collect_vood", "1.0.5")]
     [Description("Makes all sleepers invisible")]
     class InvisibleSleepers : RustPlugin
     {
@@ -20,6 +20,8 @@ namespace Oxide.Plugins
         private Configuration config;
         private class Configuration
         {
+            [JsonProperty(PropertyName = "Performance Mode")]
+            public bool performanceMode = false;
             [JsonProperty(PropertyName = "Show clan members")]
             public bool showClan = false;
             [JsonProperty(PropertyName = "Show team members")]
@@ -46,18 +48,27 @@ namespace Oxide.Plugins
         {
             permission.RegisterPermission(permAllow, this);
             permission.RegisterPermission(permBypass, this);
-
-            foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
+            if (config.performanceMode) Unsubscribe("CanNetworkTo");
+            if (config.performanceMode)
             {
-                if (player != null && HasPerm(player)) HideSleeper(player);
+                foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
+                {
+                    if (player != null && HasPerm(player))
+                        player.limitNetworking = true;
+                }              
+            }
+            else
+            {
+                foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
+                {
+                    if (player != null && HasPerm(player))
+                        HideSleeper(player);
+                }               
             }
         }
         //Credit: most code taken from the vanish plugin made by Wulf
-        private object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
-        {           
-            var player = entity as BasePlayer ?? (entity as HeldEntity)?.GetOwnerPlayer();
-            if (player == null || target == null || player == target)
-                return null;
+        private object CanNetworkTo(BasePlayer player, BasePlayer target)
+        {
             if (player.IsSleeping() && HasPerm(player))
             {
                 if (CanBypass(target, player))
@@ -74,10 +85,6 @@ namespace Oxide.Plugins
             if (player.IsSleeping() && HasPerm(player))
                 return false;
             return null;
-        }
-        void OnPlayerDisconnected(BasePlayer player, string reason)
-        {
-            if (player != null && HasPerm(player)) HideSleeper(player);
         }
         void HideSleeper(BasePlayer player)
         {
@@ -105,13 +112,29 @@ namespace Oxide.Plugins
             }
             player.UpdatePlayerCollider(false);
         }
+
+        //Credit: birthdates for .limitNetworking possibly fixing some lag issues
+        void OnPlayerSleep(BasePlayer player)
+        {
+            if (player != null && HasPerm(player))
+            {
+                if (config.performanceMode)
+                    player.limitNetworking = true;
+                else
+                    HideSleeper(player);
+            }
+        }
+        void OnPlayerSleepEnded(BasePlayer player)
+        {
+            if (player != null)
+                player.limitNetworking = false;
+        }
         #endregion
 
         #region Helpers
         private bool HasPerm(BasePlayer player) => permission.UserHasPermission(player.UserIDString, permAllow);
         private bool CanBypass(BasePlayer player, BasePlayer target)
         {
-
             if (permission.UserHasPermission(player.UserIDString, permBypass) || config.showTeam && IsTeamMember(player, target) || config.showFriends && IsFriend(player, target) || config.showClan && IsClanMember(player, target))
                 return true;
             return false;
@@ -127,21 +150,8 @@ namespace Oxide.Plugins
                 return false;
             return playerClan == otherPlayerClan;
         }
-        bool IsTeamMember(BasePlayer player, BasePlayer target)
-        {
-            var team = RelationshipManager.Instance.FindTeam(player.currentTeam);
-            if (team == null)
-                return false;
-            return (team.members.Contains(target.userID));
-
-        }
-        bool IsFriend(BasePlayer player, BasePlayer target)
-        {
-            if (Friends == null || !Friends.IsLoaded)
-                return false;
-
-            return Friends.Call<bool>("AreFriendsS", player.UserIDString, target.UserIDString);
-        }
+        bool IsTeamMember(BasePlayer player, BasePlayer target) => RelationshipManager.Instance.FindTeam(player.currentTeam)?.members.Contains(target.userID) ?? false;
+        bool IsFriend(BasePlayer player, BasePlayer target) => Friends?.Call<bool>("AreFriendsS", player.UserIDString, target.UserIDString) ?? false;
         #endregion
     }
 }
