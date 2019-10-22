@@ -5,11 +5,9 @@ using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 
-// Requires: Friends
-
 namespace Oxide.Plugins
 {
-    [Info("Friendly Fire", "collect_vood", "1.0.6")]
+    [Info("Friendly Fire", "collect_vood", "1.0.9")]
     [Description("Gives you the ability to enable or disable friendly fire player based")]
     class FriendlyFire : CovalencePlugin
     {
@@ -30,6 +28,7 @@ namespace Oxide.Plugins
                 { "AlreadyStateOff", "Friendly Fire is already turned <color=#FF0000>off</color>!" },
                 { "FFHelp", "Friendly Fire:\n/ff on - to turn on friendly fire\n/ff off - to turn off friendly fire" },
                 { "CommandArguments", "You have to use <color=#7FFF00>on</color> or <color=#FF0000>off</color> as arguments!" },
+                { "NoPermission", "You don't have access to use this command"}
             }, this);
         }
         #endregion
@@ -45,6 +44,10 @@ namespace Oxide.Plugins
             {
                 { "Friendly Fire", false }
             };
+            [JsonProperty(PropertyName = "Change friendly fire state permission")]
+            public string ChangeStatePermission = "friendlyfire.changestate";
+            [JsonProperty(PropertyName = "Send friendly fire messages")]
+            public bool SendMessages = true;
 
         }
         protected override void LoadDefaultConfig()
@@ -93,8 +96,9 @@ namespace Oxide.Plugins
         #region Hooks
         private void Init()
         {
+            permission.RegisterPermission(config.ChangeStatePermission, this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
-            AddCovalenceCommand(config.Command, nameof(CommandFriendlyFire));
+            AddCovalenceCommand(config.Command, nameof(CommandFriendlyFire));        
         }
         private void OnServerInitialized()
         {
@@ -102,29 +106,36 @@ namespace Oxide.Plugins
                 CreatePlayerSettings(player.IPlayer);
             SaveData();
         }
-        object OnEntityTakeDamage(BasePlayer player, HitInfo info)
+        object OnPlayerAttack(BasePlayer player, HitInfo info)
         {
-            if (info == null || info.InitiatorPlayer == null || player == null)
+            if (info?.HitEntity == null || player == null)
                 return null;
-            IPlayer attacker = info.InitiatorPlayer.IPlayer;
-            if (attacker == null || attacker == player.IPlayer)
+            IPlayer attacker = player.IPlayer;
+            if (!(info.HitEntity is BasePlayer))
+                return null;
+            BasePlayer victimBP = info.HitEntity as BasePlayer;
+            IPlayer victim = victimBP.IPlayer;
+            if (attacker == null || victim == null || attacker.Id == victim.Id)
                 return null;
             CreatePlayerSettings(attacker);
-            CreatePlayerSettings(player.IPlayer);
-            if (!allPlayerSettings[attacker.Id].ff || !allPlayerSettings[player.UserIDString].ff)
-            {
-                if (Friends.Call<bool>("AreFriendsS", attacker.Id, player.UserIDString))
+            CreatePlayerSettings(victim);
+            if (!allPlayerSettings[attacker.Id].ff || !allPlayerSettings[victim.Id].ff)
+            {           
+                if (IsTeamMember(player, victimBP) || (Friends?.Call<bool>("AreFriendsS", attacker.Id, victim.Id) ?? false))
                 {
-                    if (!allPlayerSettings[attacker.Id].ff)
+                    if (config.SendMessages)
                     {
-                        attacker.Reply(GetMessage("NoFriendlyFire", attacker));
+                        if (!allPlayerSettings[attacker.Id].ff)
+                        {
+                            attacker.Reply(GetMessage("NoFriendlyFire", attacker));
+                        }
+                        else
+                        {
+                            attacker.Reply(GetMessage("OtherNoFriendlyFire", attacker, victim.Name));
+                        }
+                        victim.Reply(GetMessage("FriendAttack", victim, attacker.Name));
                     }
-                    else
-                    {
-                        attacker.Reply(GetMessage("OtherNoFriendlyFire", attacker, player.IPlayer.Name));
-                    }
-                    player.ChatMessage(GetMessage("FriendAttack", player.IPlayer, attacker.Name));
-
+                    Interface.Oxide.CallHook("OnFriendAttacked", attacker, victim, info);
                     return true;
                 }
             }
@@ -136,6 +147,11 @@ namespace Oxide.Plugins
         #region Command
         private void CommandFriendlyFire(IPlayer player, string command, string[] args)
         {
+            if (!HasPermission(player))
+            {
+                player.Reply(GetMessage("NoPermission", player));
+                return;
+            }
             CreatePlayerSettings(player);
             if (args.Length <= 0)
             {
@@ -183,6 +199,8 @@ namespace Oxide.Plugins
 
         #region Helpers
         string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
+        bool HasPermission(IPlayer player) => permission.UserHasPermission(player.Id, config.ChangeStatePermission);
+        bool IsTeamMember(BasePlayer player, BasePlayer possibleMember) => player.currentTeam == possibleMember.currentTeam;
         #endregion
     }
 }

@@ -4,7 +4,7 @@ using Oxide.Core.Plugins;
 using System.Collections.Generic;
 namespace Oxide.Plugins
 {
-    [Info("Invisible Sleepers", "collect_vood", "1.0.5")]
+    [Info("Invisible Sleepers", "collect_vood", "1.0.6")]
     [Description("Makes all sleepers invisible")]
     class InvisibleSleepers : RustPlugin
     {
@@ -46,16 +46,17 @@ namespace Oxide.Plugins
         #region Hooks
         void Init()
         {
+            Unsubscribe("OnPlayerSleep");
             permission.RegisterPermission(permAllow, this);
             permission.RegisterPermission(permBypass, this);
-            if (config.performanceMode) Unsubscribe("CanNetworkTo");
             if (config.performanceMode)
             {
+                Unsubscribe("CanNetworkTo");
                 foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
                 {
                     if (player != null && HasPerm(player))
                         player.limitNetworking = true;
-                }              
+                }
             }
             else
             {
@@ -63,8 +64,13 @@ namespace Oxide.Plugins
                 {
                     if (player != null && HasPerm(player))
                         HideSleeper(player);
-                }               
+                }
             }
+        }
+        void OnServerInitialized()
+        {
+            // Resubscribing to not get null exception on server startup
+            Subscribe("OnPlayerSleep");
         }
         //Credit: most code taken from the vanish plugin made by Wulf
         private object CanNetworkTo(BasePlayer player, BasePlayer target)
@@ -91,9 +97,10 @@ namespace Oxide.Plugins
             List<Connection> connections = new List<Connection>();
             foreach (BasePlayer target in BasePlayer.activePlayerList)
             {
-                if (player == target || !target.IsConnected || CanBypass(target, player))
+                if (target == null || player == target || !target.IsConnected || CanBypass(target, player))
                     continue;
-                connections.Add(target.net.connection);
+                if (target.net?.connection != null)
+                    connections.Add(target.net.connection);
             }
             HeldEntity heldEntity = player.GetHeldEntity();
             if (heldEntity != null)
@@ -116,6 +123,8 @@ namespace Oxide.Plugins
         //Credit: birthdates for .limitNetworking possibly fixing some lag issues
         void OnPlayerSleep(BasePlayer player)
         {
+            if (config == null)
+                LoadConfig();
             if (player != null && HasPerm(player))
             {
                 if (config.performanceMode)

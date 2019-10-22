@@ -1,10 +1,14 @@
-﻿using Oxide.Core.Plugins;
+﻿using Newtonsoft.Json;
+using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
 
+// Requires: FriendlyFire
+
 namespace Oxide.Plugins
 {
-    [Info("Punish Friendly Fire", "BuzZ", "1.1.0")]
+    [Info("Punish Friendly Fire", "collect_vood", "1.2.0")]
     [Description("Punish player by X% of the damage done to friends.")]
 
 /*======================================================================================================================= 
@@ -17,105 +21,88 @@ namespace Oxide.Plugins
 *
 *********************************************
 *   Original author :   Vliek on versions <1.1.0
-*   Maintainer(s)   :   BuzZ since 20181116 from v1.1.0
+*   Maintainer(s)   :   BuzZ 20181116 from v1.1.0
+                        collect_vood since 20190926 from v1.2.0
 *********************************************   
 *=======================================================================================================================*/
 
-
-    class PunishFF : RustPlugin
+        //permissions
+        
+    class PunishFF : CovalencePlugin
     {
         [PluginReference]
-        private Plugin Friends;
+        private Plugin FriendlyFire;
 
-        private bool Changed;
-        private float attackerAmount;
-        private bool adminPunish;
-        private string adminPerm;
-        bool debug = false;
+        #region Localization
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>()
+            {
+                { "PunishFriendlyFire", "Friend punishment damage: {0}" },
+            }, this);
+        }
+        #endregion
 
+        #region Config       
+        private Configuration config;
+        private class Configuration
+        {    
+            [JsonProperty(PropertyName = "Percentage of damage to punish")]
+            public int percentagePunish = 50;
+            [JsonProperty(PropertyName = "Only punish damage on players with permission")]
+            public bool onlyPunishPermission = false;
+            [JsonProperty(PropertyName = "Give damage permission")]
+            public string givePermission = "punishff.give";
+            [JsonProperty(PropertyName = "Debug")]
+            public bool Debug = false;
+        }
         protected override void LoadDefaultConfig()
         {
-            if (debug)Puts("Creating a new config file.");
-            Config.Clear();
-            LoadVariables();
+            PrintWarning("Creating a new configuration file");
+            config = new Configuration();
         }
-
-        private void LoadVariables()
+        protected override void LoadConfig()
         {
-            attackerAmount = Convert.ToSingle(GetConfig("Settings", "% of punish damage given (Default 50%)", 50));
-            adminPunish = Convert.ToBoolean(GetConfig("Settings", "Only punish damage on admins", false));
-            adminPerm = Convert.ToString(GetConfig("Settings", "Admin permission", "PunishFF.admin"));  //verif qu on peu mettre nimp ?
-
-            if (!Changed) return;
+            base.LoadConfig();
+            config = Config.ReadObject<Configuration>();
             SaveConfig();
-            Changed = false;
         }
+        protected override void SaveConfig() => Config.WriteObject(config);
+        #endregion
 
-        object GetConfig(string menu, string datavalue, object defaultValue)
-        {
-            var data = Config[menu] as Dictionary<string, object>;
-            if (data == null)
-            {
-                data = new Dictionary<string, object>();
-                Config[menu] = data;
-                Changed = true;
-            }
-            object value;
-            if (!data.TryGetValue(datavalue, out value))
-            {
-                value = defaultValue;
-                data[datavalue] = value;
-                Changed = true;
-            }
-            return value;
-        }
-
+        #region Hooks
         private void Init()
         {
-            LoadVariables();
-            permission.RegisterPermission(adminPerm, this);
+            permission.RegisterPermission(config.givePermission, this);
         }
-
-        private object OnAttackInternal(BasePlayer attacker, BasePlayer victim, HitInfo hit)
+        private void OnFriendAttacked(IPlayer attacker, IPlayer victim, HitInfo info)
         {
-            if (attacker == victim)
-                return null;
-
-            float amount = hit.damageTypes.Get(hit.damageTypes.GetMajorityDamageType());
-            float scale = attackerAmount / 100;
-
-            if (!adminPunish)
+            float amount = info.damageTypes.Get(info.damageTypes.GetMajorityDamageType());
+            float scale = config.percentagePunish / 100;
+            if (!config.onlyPunishPermission)
             {
-                var victimId = victim.userID;
-                var attackerId = attacker.userID;
-                var hasFriend = (bool)(Friends?.CallHook("HasFriend", attackerId, victimId) ?? false);
-
-                if (hasFriend)
-                {
-                    attacker.Hurt(amount * scale);
-                    if (debug)Puts(amount.ToString());
-                    if (debug)Puts(scale.ToString());
-                    return true;
-                }
+                attacker.Hurt(amount * scale);
+                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, (amount * scale).ToString()));
+                if (config.Debug) Puts(amount.ToString());
+                if (config.Debug) Puts(scale.ToString());
+                return;
             }
             else
             {
-                if (!permission.UserHasPermission(victim.UserIDString, adminPerm))
-                return null;
-
+                if (!HasPermission(victim))
+                    return;
                 attacker.Hurt(amount * scale);
-                if (debug)Puts(amount.ToString());
-                if (debug)Puts(scale.ToString());
-                return true;
+                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, (amount * scale).ToString()));
+                if (config.Debug) Puts(amount.ToString());
+                if (config.Debug) Puts(scale.ToString());
+                return;
             }
-            return null;
         }
+        #endregion
 
-        void OnPlayerAttack(BasePlayer attacker, HitInfo hitInfo)
-        {
-            if (attacker == null || hitInfo == null) return;
-            if (hitInfo?.HitEntity is BasePlayer)
-            OnAttackInternal(attacker, (BasePlayer)hitInfo.HitEntity, hitInfo);
-        }
+        #region Helpers
+        string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
+        bool HasPermission(IPlayer player) => permission.UserHasPermission(player.Id, config.givePermission);
+        #endregion
     }
 }

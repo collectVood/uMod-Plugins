@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Custom Icon", "collect_vood", "1.0.1")]
+    [Info("Custom Icon", "collect_vood", "1.0.2")]
     [Description("Set a customizable icon for all non user messages")]
 
     class CustomIcon : CovalencePlugin
@@ -29,8 +29,8 @@ namespace Oxide.Plugins
         protected override void SaveConfig() => Config.WriteObject(config);
         #endregion
 
-        #region Hooks
-        object[] OnBroadcastCommand(string command, object[] args)
+        #region Hooks        
+        private object OnBroadcastCommand(string command, object[] args)
         {
             if (args != null && config != null)
             {
@@ -39,12 +39,13 @@ namespace Oxide.Plugins
                     if (args[0].ToString() == "0")
                     {
                         args[0] = config.SteamAvatarUserID;
+                        return true;
                     }
                 }
             }
-            return args;
+            return null;
         }
-        object[] OnSendCommand(Connection connection, string command, params object[] args)
+        private object OnSendCommand(Connection connection, string command, object[] args)
         {
             if (args != null && config != null)
             {
@@ -53,10 +54,11 @@ namespace Oxide.Plugins
                     if (args[0].ToString() == "0")
                     {
                         args[0] = config.SteamAvatarUserID;
+                        return true;
                     }
                 }
             }
-            return args;
+            return null;
         }
         #endregion
     }
