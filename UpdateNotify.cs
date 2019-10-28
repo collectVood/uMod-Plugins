@@ -9,7 +9,7 @@ namespace Oxide.Plugins
 
     class UpdateNotify : RustPlugin
     {
-        #region Lang
+        #region Localization
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
@@ -18,6 +18,29 @@ namespace Oxide.Plugins
                 { "No response", "Error: {0} - Couldn't get any response. Plugin: {1}"}
             }, this);
         }
+        #endregion
+
+        #region Config       
+        private Configuration config;
+        private class Configuration
+        {
+            [JsonProperty(PropertyName = "Refresh time (seconds)")]
+            public float RefreshTimeSeconds = 3600f;
+            [JsonProperty(PropertyName = "Discord Webhook Channel Link")]
+            public string DiscordWebhook = "";
+        }
+        protected override void LoadDefaultConfig()
+        {
+            PrintWarning("Creating a new configuration file");
+            config = new Configuration();
+        }
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            config = Config.ReadObject<Configuration>();
+            SaveConfig();
+        }
+        protected override void SaveConfig() => Config.WriteObject(config);
         #endregion
 
         #region Class - UpdateInfo
@@ -30,12 +53,13 @@ namespace Oxide.Plugins
         #region Hooks
         private void Init()
         {
-            ScheduledCheck();
+            SendToDiscord("Ok");
+            //ScheduledCheck();
         }
         private void ScheduledCheck()
         {
             CheckPlugins();
-            timer.Every(3600f, () =>
+            timer.Every(config.RefreshTimeSeconds, () =>
             {
                 CheckPlugins();
             });
@@ -50,6 +74,7 @@ namespace Oxide.Plugins
                 if (plugin.Name == "RustCore" || plugin.Name == "UnityCore")
                     continue;
                 string apiLink = "https://umod.org/plugins/" + InsertMinBeforeUpperCase(plugin.Name) + ".json";
+                Puts(apiLink);
                 GetRequest(apiLink, plugin);
             }
         }
@@ -62,22 +87,25 @@ namespace Oxide.Plugins
         {
             if (response == null || code != 200)
             {
-                PrintError(lang.GetMessage("No response", this), code, plugin.Name);
+                PrintError(GetMessage("No response", code.ToString(), plugin.Name));
                 return;
             }
+            PrintWarning(response);
             var updateInfo = JsonConvert.DeserializeObject<UpdateInfo>(response);
             if (updateInfo.latest_release_version != plugin.Version.ToString())
             {
-                PrintWarning(lang.GetMessage("Update", this), plugin.Name, plugin.Version, updateInfo.latest_release_version);
+                string message = GetMessage("Update", plugin.Name, plugin.Version.ToString(), updateInfo.latest_release_version);
+                PrintWarning(message);
+                SendToDiscord(message);
                 foreach (var player in Player.Players)
                 {
                     if (player.IsAdmin)
-                        player.IPlayer.Reply(lang.GetMessage("Update", this, player.UserIDString), plugin.Name, plugin.Version, updateInfo.latest_release_version);
+                        player.ChatMessage(message);
                 }
             }
             return;
         }
-        public static string InsertMinBeforeUpperCase(string str)
+        private static string InsertMinBeforeUpperCase(string str)
         {
             var sb = new StringBuilder();
             char previousChar = char.MinValue;       
@@ -93,6 +121,18 @@ namespace Oxide.Plugins
             }
             return sb.ToString();
         }
+        private void SendToDiscord(string message)
+        {
+            webrequest.Enqueue(config.DiscordWebhook, message, (code, response) =>
+            {
+                if (code != 200 || response == null)
+                {
+                    PrintWarning(GetMessage("No response", code.ToString(), "Discord Webhook", response));
+                    return;
+                }
+            }, this, RequestMethod.POST);
+        }
+        string GetMessage(string key, params string[] args) => System.String.Format(lang.GetMessage(key, this), args);
         #endregion
     }
 }

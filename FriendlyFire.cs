@@ -7,12 +7,12 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Friendly Fire", "collect_vood", "1.0.9")]
+    [Info("Friendly Fire", "collect_vood", "1.1.0")]
     [Description("Gives you the ability to enable or disable friendly fire player based")]
     class FriendlyFire : CovalencePlugin
     {
         [PluginReference]
-        private Plugin Friends;
+        private Plugin Friends, Clans;
 
         #region Localization
         protected override void LoadDefaultMessages()
@@ -48,7 +48,12 @@ namespace Oxide.Plugins
             public string ChangeStatePermission = "friendlyfire.changestate";
             [JsonProperty(PropertyName = "Send friendly fire messages")]
             public bool SendMessages = true;
-
+            [JsonProperty(PropertyName = "Include check if friend")]
+            public bool isFriendCheck = true;
+            [JsonProperty(PropertyName = "Include check if team member")]
+            public bool isTeamMemberCheck = true;
+            [JsonProperty(PropertyName = "Include check if clan member")]
+            public bool isClanMemberCheck = true;
         }
         protected override void LoadDefaultConfig()
         {
@@ -120,8 +125,8 @@ namespace Oxide.Plugins
             CreatePlayerSettings(attacker);
             CreatePlayerSettings(victim);
             if (!allPlayerSettings[attacker.Id].ff || !allPlayerSettings[victim.Id].ff)
-            {           
-                if (IsTeamMember(player, victimBP) || (Friends?.Call<bool>("AreFriendsS", attacker.Id, victim.Id) ?? false))
+            {
+                if ((config.isTeamMemberCheck && IsTeamMember(player, victimBP)) || (config.isFriendCheck && (Friends?.Call<bool>("AreFriendsS", attacker.Id, victim.Id) ?? false)) || (config.isClanMemberCheck && IsClanMember(player, victimBP)))
                 {
                     if (config.SendMessages)
                     {
@@ -201,6 +206,15 @@ namespace Oxide.Plugins
         string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
         bool HasPermission(IPlayer player) => permission.UserHasPermission(player.Id, config.ChangeStatePermission);
         bool IsTeamMember(BasePlayer player, BasePlayer possibleMember) => player.currentTeam == possibleMember.currentTeam;
+        bool IsClanMember(BasePlayer player, BasePlayer possibleMember)
+        {
+            if (Clans == null || !Clans.IsLoaded)
+                return false;
+
+            var playerClan = Clans.Call<string>("GetClanOf", player);
+            var otherPlayerClan = Clans.Call<string>("GetClanOf", possibleMember);
+            return playerClan == otherPlayerClan;
+        }
         #endregion
     }
 }
