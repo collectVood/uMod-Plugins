@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Friendly Fire", "collect_vood", "1.1.0")]
+    [Info("Friendly Fire", "collect_vood", "1.1.1")]
     [Description("Gives you the ability to enable or disable friendly fire player based")]
     class FriendlyFire : CovalencePlugin
     {
@@ -205,7 +205,12 @@ namespace Oxide.Plugins
         #region Helpers
         string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
         bool HasPermission(IPlayer player) => permission.UserHasPermission(player.Id, config.ChangeStatePermission);
-        bool IsTeamMember(BasePlayer player, BasePlayer possibleMember) => player.currentTeam == possibleMember.currentTeam;
+        bool IsTeamMember(BasePlayer player, BasePlayer possibleMember)
+        {
+            if (player.currentTeam == 0 || possibleMember.currentTeam == 0)
+                return false;
+            return player.currentTeam == possibleMember.currentTeam;
+        }
         bool IsClanMember(BasePlayer player, BasePlayer possibleMember)
         {
             if (Clans == null || !Clans.IsLoaded)
@@ -213,6 +218,10 @@ namespace Oxide.Plugins
 
             var playerClan = Clans.Call<string>("GetClanOf", player);
             var otherPlayerClan = Clans.Call<string>("GetClanOf", possibleMember);
+            if (String.IsNullOrEmpty(otherPlayerClan) || String.IsNullOrEmpty(playerClan))
+            {
+                return false;
+            }
             return playerClan == otherPlayerClan;
         }
         #endregion

@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Custom Icon", "collect_vood", "1.0.2")]
+    [Info("Custom Icon", "collect_vood", "1.0.3")]
     [Description("Set a customizable icon for all non user messages")]
 
     class CustomIcon : CovalencePlugin
@@ -36,9 +36,9 @@ namespace Oxide.Plugins
             {
                 if (args.Length > 0 && command == "chat.add")
                 {
-                    if (args[0].ToString() == "0")
+                    if (args[1].ToString() == "0")
                     {
-                        args[0] = config.SteamAvatarUserID;
+                        args[1] = config.SteamAvatarUserID;
                         return true;
                     }
                 }
@@ -51,9 +51,9 @@ namespace Oxide.Plugins
             {
                 if (args.Length > 0 && command == "chat.add")
                 {
-                    if (args[0].ToString() == "0")
+                    if (args[1].ToString() == "0")
                     {
-                        args[0] = config.SteamAvatarUserID;
+                        args[1] = config.SteamAvatarUserID;
                         return true;
                     }
                 }

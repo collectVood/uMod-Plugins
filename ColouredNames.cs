@@ -1,300 +1,291 @@
 ﻿using System;
 using System.Linq;
-using System.Collections.Generic;
-using Oxide.Core;
-using Oxide.Core.Plugins;
-using Oxide.Core.Libraries.Covalence;
 using System.Text.RegularExpressions;
-
-//Reference: System.Drawing
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("ColouredNames", "collect_vood & PsychoTea", "1.3.4", ResourceId = 1362)]
-    [Description("Allows players to change their name colour in chat.")]
-
-    class ColouredNames : RustPlugin
+    [Info("Coloured Names", "collect_vood", "1.3.7")]
+    [Description("Allows players to change their name colour in chat")]
+    class ColouredNames : CovalencePlugin
     {
-        [PluginReference] Plugin BetterChat;
+        [PluginReference]
+        private Plugin BetterChat;
 
-        const string permUse = "colourednames.use";
-        const string permBypass = "colourednames.bypass";
-        const string permSetOthers = "colourednames.setothers";
+        #region Constants
         const string colourRegex = "^#(?:[0-9a-fA-f]{3}){1,2}$";
-        readonly string[] blockedValues = { "{", "}", "size" };
+        #endregion
 
-        Dictionary<ulong, string> colour = new Dictionary<ulong, string>();
-        List<string> blockedColours = new List<string>();
-
-        #region Lang
+        #region Localization
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
-                { "NoPermission", "You don't have permission to use this." },
-                { "NoPermissionSetOthers", "You don't have permission to set other players' colours." },
+                { "NoPermission", "You don't have permission to use this command." },
+                { "NoPermissionSetOthers", "You don't have permission to set other players colours." },
                 { "IncorrectUsage", "<color=#00AAFF>Incorrect usage!</color><color=#A8A8A8> /colour {{colour}} [player]\nFor a list of colours do /colours</color>" },
-                { "PlayerNotFound", "Player {0} was not found." },
+                { "PlayerNotFound", "Player <color=#00AAFF>{0}</color> was not found." },
                 { "SizeBlocked", "You may not try and change your size! You sneaky player..." },
                 { "InvalidCharacters", "The character '{0}' is not allowed in colours. Please remove it." },
                 { "ColourBlocked", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>That colour is blocked.</color>" },
+                { "ColourNotWhitelisted", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>That colour is not whitelisted.</color>"},
                 { "ColourRemoved", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour removed!</color>" },
                 { "ColourChanged", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour changed to </color><color={0}>{0}</color><color=#A8A8A8>!</color>" },
                 { "ColourChangedFor", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>{0}'s name colour changed to </color><color={1}>{1}</color><color=#A8A8A8>!</color>" },
-                { "ChatMessage", "<color={0}>{1}</color>: {2}" },
                 { "LogInfo", "[CHAT] {0}[{1}/{2}] : {3}" },
-                { "ColoursInfo", "<color=#00AAFF>ColouredNames</color><color=#A8A8A8>\nYou can only use hexcode, eg '</color><color=#FFFF00>#FFFF00</color><color=#A8A8A8>'\nTo remove your colour, use 'clear' or 'remove'\nAn invalid colour will default to </color>white<color=#A8A8A8></color>" },
-                { "CantUseClientside", "You may not use this command from ingame - server cosole only." },
-                { "ConsoleColourIncorrectUsage", "Incorrect usage! colour {{userid}} {{colour}}" },
-                { "InvalidIDConsole", "Error! {0} is not a SteamID!" },
+                { "ColoursInfo", "<color=#00AAFF>ColouredNames</color><color=#A8A8A8>\nYou can only use hexcode, eg '</color><color=#FFFF00>#FFFF00</color><color=#A8A8A8>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\nAn invalid colour will default to </color>white<color=#A8A8A8></color>" },
+                { "ConsoleColourIncorrectUsage", "Incorrect usage! colour {{colour}} {{partialNameOrUserid}}" },
                 { "ConsoleColourChanged", "Colour of {0} changed to {1}." },
                 { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." }
             }, this);
         }
         #endregion
 
-        #region Hooks
-
-        void Init()
+        #region Config       
+        private Configuration config;
+        private class Configuration
         {
-            permission.RegisterPermission(permUse, this);
-            permission.RegisterPermission(permBypass, this);
-            permission.RegisterPermission(permSetOthers, this);
-          
-            ReadData();
-
-            foreach (var obj in GetConfig<List<object>>("BlockedColours"))
-                blockedColours.Add(obj.ToString().ToLower());
+            [JsonProperty(PropertyName = "Colour Command")]
+            public string ColourCommand = "colour";
+            [JsonProperty(PropertyName = "Colours Command (Help)")]
+            public string ColoursCommand = "colours";
+            [JsonProperty(PropertyName = "Use permission")]
+            public string permUse = "colourednames.use";
+            [JsonProperty(PropertyName = "Bypass restrictions permission")]
+            public string permBypass = "colourednames.bypass";
+            [JsonProperty(PropertyName = "Set others colour permission")]
+            public string permSetOthers = "colourednames.setothers";
+            [JsonProperty(PropertyName = "Use Blacklist")]
+            public bool UseBlacklist = true;
+            [JsonProperty(PropertyName = "Blocked Characters")]
+            public string[] blockedValues = { "{", "}", "size" };
+            [JsonProperty(PropertyName = "Blocked Colours Hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public List<string> blockColoursHex = new List<string>
+            {
+                { "#000000" }
+            };
+            [JsonProperty(PropertyName = "Use Whitelist")]
+            public bool UseWhitelist = false;
+            [JsonProperty(PropertyName = "Whitelisted Colours Hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public List<string> whitelistedColoursHex = new List<string>
+            {
+                { "#000000" }
+            };
         }
-
         protected override void LoadDefaultConfig()
         {
-            PrintWarning("Creating a new configuration file.");
+            PrintWarning("Creating a new configuration file");
+            config = new Configuration();
+        }
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            config = Config.ReadObject<Configuration>();
+            SaveConfig();
+        }
+        protected override void SaveConfig() => Config.WriteObject(config);
+        #endregion
 
-            Config["BlockedColours"] = new List<string>() { "#000000" };
+        #region Data
+        private StoredData storedData;
+        private Dictionary<string, string> allColourData => storedData.AllColourData;
 
-            Puts("New config file generated.");
+        private class StoredData
+        {
+            public Dictionary<string, string> AllColourData { get; private set; } = new Dictionary<string, string>();
         }
 
-        object OnPlayerChat(ConsoleSystem.Arg arg)
+        private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
+        private void OnServerSave() => SaveData();
+        private void Unload() => SaveData();
+
+        private void ChangeColour(IPlayer target, string newColour)
+        {
+            if (!allColourData.ContainsKey(target.Id)) allColourData.Add(target.Id, "");
+            allColourData[target.Id] = newColour;
+        }
+        #endregion
+
+        #region Hooks
+        private void Init()
+        {
+            permission.RegisterPermission(config.permUse, this);
+            permission.RegisterPermission(config.permBypass, this);
+            permission.RegisterPermission(config.permSetOthers, this);
+
+            AddCovalenceCommand(config.ColourCommand, nameof(ColourCommand));
+            AddCovalenceCommand(config.ColoursCommand, nameof(ColoursCommand));
+
+            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+        }
+
+        private object OnPlayerChat(ConsoleSystem.Arg arg)
         {
             if (BetterChatIns()) return null;
+            BasePlayer bPlayer = arg.Connection.player as BasePlayer;
+            IPlayer player = covalence.Players.FindPlayerById(bPlayer.UserIDString);
+            if (player == null) return null;
 
-            BasePlayer player = (BasePlayer)arg.Connection.player;
+            if (!allColourData.ContainsKey(player.Id)) return null;
 
-            if (!colour.ContainsKey(player.userID)) return null;
-
-            string argMsg = arg.GetString(0, "text");
-            string message = GetMessage("ChatMessage", player, colour[player.userID], player.displayName, argMsg);
-
-            Server.Broadcast(message, player.userID);
-
-            Interface.Oxide.LogInfo(GetMessage("LogInfo", player, player.displayName, player.net.ID.ToString(), player.UserIDString, argMsg));
+            string argMsg = arg.GetString(1, "text");
+            if (Convert.ToInt32(arg.Args[0]) != 0)
+            {
+                return null;
+            }
+            server.Broadcast(argMsg, $"<color={allColourData[player.Id]}>{player.Name}</color>", player.Id);    
+            Interface.Oxide.LogInfo(GetMessage("LogInfo", player, player.Name, bPlayer.net.ID.ToString(), player.Id, argMsg));
             return true;
         }
 
         Dictionary<string, object> OnBetterChat(Dictionary<string, object> dict)
         {
-            ulong userId = ulong.Parse((dict["Player"] as IPlayer).Id);
-            if (!colour.ContainsKey(userId)) return dict;
-            ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = colour[userId];
+            string Id = (dict["Player"] as IPlayer).Id;
+            if (!allColourData.ContainsKey(Id)) return dict;
+            ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = allColourData[Id];
             return dict;
         }
-
         #endregion
 
-        #region Chat Commands
-
-        [ChatCommand("colour")]
-        void colourCommand(BasePlayer player, string command, string[] args)
+        #region Commands
+        void ColourCommand(IPlayer player, string cmd, string[] args)
         {
-            if (!HasPerm(player))
+            string colLower = string.Empty;
+            if (player.IsServer)
             {
-                player.ChatMessage(GetMessage("NoPermission", player));
-                return;
-            }
-
-            if (args.Length == 0)
-            {
-                player.ChatMessage(GetMessage("IncorrectUsage", player));
-                return;
-            }
-
-            string colLower = args[0].ToLower();
-
-            if (colLower == "clear" || colLower == "remove")
-            {
-                colour.Remove(player.userID);
-                SaveData();
-                player.ChatMessage(GetMessage("ColourRemoved", player));
-                return;
-            }
-
-            var invalid = CheckInvalids(colLower);
-            if (invalid != "")
-            {
-                player.ChatMessage(GetMessage("InvalidCharacters", player, invalid));
-                return;
-            }
-
-            if (!CanBypass(player))
-            {
-
-                if (blockedColours.Where(x => x == colLower).Any())
+                if (args.Length < 2)
                 {
-                    player.ChatMessage(GetMessage("ColourBlocked", player));
+                    player.Reply(GetMessage("ConsoleColourIncorrectUsage", player));
                     return;
                 }
-            }
-
-            if (!IsValidColour(args[0]))
-            {
-                player.ChatMessage(GetMessage("InvalidColour", player));
-                return;
-            }
-
-            if (args.Length > 1)
-            {
-                if (!CanSetOthers(player))
-                {
-                    player.ChatMessage(GetMessage("NoPermissionSetOthers", player));
-                    return;
-                }
-
-                BasePlayer target = rust.FindPlayerByName(args[1]);
+                IPlayer target = covalence.Players.FindPlayer(args[1]);
                 if (target == null)
                 {
-                    player.ChatMessage(GetMessage("PlayerNotFound", player, args[1]));
+                    player.Reply(GetMessage("PlayerNotFound", player, args[1]));
+                    return;
+                }
+                colLower = args[0].ToLower();
+                if (!ProcessColour(target, colLower, player))
+                    return;
+                ChangeColour(target, args[0]);
+                player.Reply(GetMessage("ConsoleColourChanged", player, target.Name, args[0]));
+                return;
+            }
+            if (!HasPerm(player))
+            {
+                player.Reply(GetMessage("NoPermission", player));
+                return;
+            }
+            if (args.Length == 0)
+            {
+                player.Reply(GetMessage("IncorrectUsage", player));
+                return;
+            }
+            colLower = args[0].ToLower();
+            if (!ProcessColour(player, colLower))
+                return;
+
+            if (!IsValid(colLower) && !CanBypass(player))
+            {
+                if (config.UseBlacklist)
+                    player.Reply(GetMessage("ColourBlocked", player));
+                else if (config.UseWhitelist)
+                    player.Reply(GetMessage("ColourNotWhitelisted", player));
+                return;
+            }
+            if (args.Length > 1)
+            {
+                //Setting for other person area
+                if (!CanSetOthers(player))
+                {
+                    player.Reply(GetMessage("NoPermissionSetOthers", player));
+                    return;
+                }
+
+                IPlayer target = covalence.Players.FindPlayerById(args[1]);
+                if (target == null)
+                {
+                    player.Reply(GetMessage("PlayerNotFound", player, args[1]));
                     return;
                 }
 
                 ChangeColour(target, args[0]);
-                player.ChatMessage(GetMessage("ColourChangedFor", player, target.displayName, args[0]));
+                player.Reply(GetMessage("ColourChangedFor", player, target.Name, args[0]));
                 return;
             }
 
             ChangeColour(player, args[0]);
-            player.ChatMessage(GetMessage("ColourChanged", player, args[0]));
+            player.Reply(GetMessage("ColourChanged", player, args[0]));
         }
-
-        [ChatCommand("colours")]
-        void coloursCommand(BasePlayer player, string command, string[] args)
+        void ColoursCommand(IPlayer player, string cmd, string[] args)
         {
             if (!HasPerm(player))
             {
-                PrintToChat(player, GetMessage("NoPermission", player));
+                player.Reply(GetMessage("NoPermission", player));
                 return;
             }
-
-            PrintToChat(player, GetMessage("ColoursInfo", player));
+            player.Reply(GetMessage("ColoursInfo", player));
         }
-
-        #endregion
-
-        #region Console Commands
-
-        [ConsoleCommand("colour")]
-        void colourConsoleCommand(ConsoleSystem.Arg arg)
-        {
-            if (!arg.IsAdmin)
-            {
-                arg.ReplyWith(GetConsoleMessage("NoPermission"));
-                return;
-            }
-
-            string[] args = (arg.Args == null) ? new string[] { } : arg.Args;
-
-            if (args.Length < 2)
-            {
-                arg.ReplyWith(GetConsoleMessage("ConsoleColourIncorrectUsage"));
-                return;
-            }
-
-            ulong userId;
-            if (!ulong.TryParse(args[0], out userId))
-            {
-                arg.ReplyWith(GetConsoleMessage("InvalidIDConsole", args[0]));
-                return;
-            }
-
-            ChangeColour(userId, args[1]);
-            string name = (BasePlayer.FindByID(userId)?.displayName ?? args[0]);
-            arg.ReplyWith(GetConsoleMessage("ConsoleColourChanged", name, args[1]));
-        }
-
-        [ConsoleCommand("viewcolours")]
-        void viewColoursCommand(ConsoleSystem.Arg arg)
-        {
-            if (!arg.IsAdmin)
-            {
-                arg.ReplyWith(GetConsoleMessage("NoPermission"));
-                return;
-            }
-
-            List<string> hexcode = new List<string>();
-            List<string> others = new List<string>();
-
-            foreach (var kvp in colour)
-            {
-                if (kvp.Value.ToArray()[0] == '#') hexcode.Add($"{kvp.Key}: {kvp.Value}");
-                else others.Add($"{kvp.Key}: {kvp.Value}");
-            }
-
-            string message = "";
-
-            float i = 1;
-            foreach (var str in hexcode)
-            {
-                message += str;
-                if (i % 3 == 0) message += "\n";
-                else message += "       ";
-                i++;
-            }
-
-            message += "\n";
-
-            i = 1;
-            foreach (var str in others)
-            {
-                message += str;
-                if (i % 3 == 0) message += "\n";
-                else message += "       ";
-                i++;
-            }
-
-            arg.ReplyWith(message);
-        }
-
         #endregion
 
         #region Helpers
-
-        bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success;
-
         bool BetterChatIns() => (BetterChat != null);
-
-        void ChangeColour(BasePlayer target, string newColour)
+        bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success;
+        string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args); 
+        bool HasPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permUse));
+        bool CanBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permBypass));
+        bool CanSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permSetOthers));
+        bool IsValid(string input)
         {
-            if (!colour.ContainsKey(target.userID)) colour.Add(target.userID, "");
-            colour[target.userID] = newColour;
-            SaveData();
+            if (config.UseBlacklist)
+            {
+                return !config.blockColoursHex.Any(x => (input == x));
+            }
+            else if (config.UseWhitelist)
+            {
+                return config.whitelistedColoursHex.Any(x => (input == x));
+            }
+            return true;
         }
-        void ChangeColour(ulong userId, string newColour) => ChangeColour(new BasePlayer() { userID = userId }, newColour);
-
-        bool HasPerm(BasePlayer player) => (player.IsAdmin || permission.UserHasPermission(player.UserIDString, permUse));
-        bool CanBypass(BasePlayer player) => (player.IsAdmin || permission.UserHasPermission(player.UserIDString, permBypass));
-        bool CanSetOthers(BasePlayer player) => (player.IsAdmin || permission.UserHasPermission(player.UserIDString, permSetOthers));
-
-        string CheckInvalids(string input) => (blockedValues.Where(x => input.Contains(x)).FirstOrDefault()) ?? string.Empty;
-
-        string GetMessage(string key, BasePlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.UserIDString), args);
-        string GetConsoleMessage(string key, params string[] args) => GetMessage(key, new BasePlayer() { userID = 0 }, args);
-
-        T GetConfig<T>(string key) => (T)Config[key];
-
-        void ReadData() => colour = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, string>>(this.Title);
-        void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(this.Title, colour);
-        
+        bool ProcessColour(IPlayer player, string colLower, IPlayer serverPlayer = null)
+        {
+            if (colLower == "reset" || colLower == "clear" || colLower == "remove")
+            {
+                allColourData.Remove(player.Id);
+                SaveData();
+                if (serverPlayer != null)
+                    serverPlayer.Reply(GetMessage("ColourRemoved", serverPlayer));
+                player.Reply(GetMessage("ColourRemoved", player));
+                return false;
+            }
+            string invalidChar;
+            if ((invalidChar = IsInvalidCharacter(colLower)) != null)
+            {
+                if (serverPlayer != null)
+                {
+                    serverPlayer.Reply(GetMessage("InvalidCharacters", serverPlayer, invalidChar));
+                    return false;
+                }
+                player.Reply(GetMessage("InvalidCharacters", player, invalidChar));
+                return false;
+            }
+            if (!IsValidColour(colLower))
+            {
+                if (serverPlayer != null)
+                {
+                    serverPlayer.Reply(GetMessage("InvalidColour", serverPlayer));
+                    return false;
+                }
+                player.Reply(GetMessage("InvalidColour", player));
+                return false;
+            }
+            return true;
+        }
+        string IsInvalidCharacter(string input) => (config.blockedValues.Where(x => input.Contains(x)).FirstOrDefault()) ?? null;
         #endregion
     }
 }

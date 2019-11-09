@@ -79,22 +79,23 @@ namespace Oxide.Plugins
         {
             float amount = info.damageTypes.Get(info.damageTypes.GetMajorityDamageType());
             float scale = config.percentagePunish / 100;
+            float dmgAmount = amount * scale;
             if (!config.onlyPunishPermission)
             {
-                attacker.Hurt(amount * scale);
-                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, (amount * scale).ToString()));
-                if (config.Debug) Puts(amount.ToString());
-                if (config.Debug) Puts(scale.ToString());
+                attacker.Hurt(dmgAmount);
+                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, dmgAmount.ToString()));
+                if (config.Debug) Puts("Amount: " + amount);
+                if (config.Debug) Puts("Scale: " + scale);
                 return;
             }
             else
             {
                 if (!HasPermission(victim))
                     return;
-                attacker.Hurt(amount * scale);
-                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, (amount * scale).ToString()));
-                if (config.Debug) Puts(amount.ToString());
-                if (config.Debug) Puts(scale.ToString());
+                attacker.Hurt(dmgAmount);
+                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, dmgAmount.ToString()));
+                if (config.Debug) Puts("Amount: " + amount);
+                if (config.Debug) Puts("Scale: " + scale);
                 return;
             }
         }
