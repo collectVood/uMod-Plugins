@@ -9,7 +9,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Names", "collect_vood", "1.3.7")]
+    [Info("Coloured Names", "collect_vood", "1.3.8")]
     [Description("Allows players to change their name colour in chat")]
     class ColouredNames : CovalencePlugin
     {
@@ -134,10 +134,11 @@ namespace Oxide.Plugins
 
             string argMsg = arg.GetString(1, "text");
             if (Convert.ToInt32(arg.Args[0]) != 0)
-            {
                 return null;
-            }
-            server.Broadcast(argMsg, $"<color={allColourData[player.Id]}>{player.Name}</color>", player.Id);    
+
+            foreach (BasePlayer Player in BasePlayer.activePlayerList)
+                Player.SendConsoleCommand("chat.add2", 0, player.Id, argMsg, player.Name, allColourData[player.Id]);
+
             Interface.Oxide.LogInfo(GetMessage("LogInfo", player, player.Name, bPlayer.net.ID.ToString(), player.Id, argMsg));
             return true;
         }
