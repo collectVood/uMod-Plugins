@@ -6,10 +6,11 @@ using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using ConVar;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Names", "collect_vood", "1.3.8")]
+    [Info("Coloured Names", "collect_vood", "1.3.9")]
     [Description("Allows players to change their name colour in chat")]
     class ColouredNames : CovalencePlugin
     {
@@ -40,7 +41,9 @@ namespace Oxide.Plugins
                 { "ColoursInfo", "<color=#00AAFF>ColouredNames</color><color=#A8A8A8>\nYou can only use hexcode, eg '</color><color=#FFFF00>#FFFF00</color><color=#A8A8A8>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\nAn invalid colour will default to </color>white<color=#A8A8A8></color>" },
                 { "ConsoleColourIncorrectUsage", "Incorrect usage! colour {{colour}} {{partialNameOrUserid}}" },
                 { "ConsoleColourChanged", "Colour of {0} changed to {1}." },
-                { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." }
+                { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." },
+                { "RndColour", "Colour was randomized to <color={0}>{0}</color>" },
+                { "ConsoleRndColour", "Colour of {0} randomized to {1}."}
             }, this);
         }
         #endregion
@@ -59,6 +62,8 @@ namespace Oxide.Plugins
             public string permBypass = "colourednames.bypass";
             [JsonProperty(PropertyName = "Set others colour permission")]
             public string permSetOthers = "colourednames.setothers";
+            [JsonProperty(PropertyName = "Get random colour permission")]
+            public string permRandomColour = "colourednames.rndcolour";
             [JsonProperty(PropertyName = "Use Blacklist")]
             public bool UseBlacklist = true;
             [JsonProperty(PropertyName = "Blocked Characters")]
@@ -116,6 +121,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(config.permUse, this);
             permission.RegisterPermission(config.permBypass, this);
             permission.RegisterPermission(config.permSetOthers, this);
+            permission.RegisterPermission(config.permRandomColour, this);
 
             AddCovalenceCommand(config.ColourCommand, nameof(ColourCommand));
             AddCovalenceCommand(config.ColoursCommand, nameof(ColoursCommand));
@@ -123,7 +129,7 @@ namespace Oxide.Plugins
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
         }
 
-        private object OnPlayerChat(ConsoleSystem.Arg arg)
+        private object OnPlayerChat(ConsoleSystem.Arg arg, Chat.ChatChannel channel)
         {
             if (BetterChatIns()) return null;
             BasePlayer bPlayer = arg.Connection.player as BasePlayer;
@@ -131,13 +137,27 @@ namespace Oxide.Plugins
             if (player == null) return null;
 
             if (!allColourData.ContainsKey(player.Id)) return null;
-
-            string argMsg = arg.GetString(1, "text");
-            if (Convert.ToInt32(arg.Args[0]) != 0)
+            string argMsg = arg.GetString(0, "text");
+            if (channel == Chat.ChatChannel.Global)
+            {
+                foreach (BasePlayer Player in BasePlayer.activePlayerList)
+                {
+                    Player.SendConsoleCommand("chat.add2", 0, player.Id, argMsg, player.Name, allColourData[player.Id]);
+                }
+            }
+            else if (channel == Chat.ChatChannel.Team)
+            {
+                foreach (ulong memberId in bPlayer.Team.members)
+                {
+                    BasePlayer member;
+                    if ((member = BasePlayer.FindByID(memberId)) != null)
+                    {
+                        member.SendConsoleCommand("chat.add2", 1, player.Id, argMsg, player.Name, allColourData[player.Id]);
+                    }
+                }
+            }
+            else
                 return null;
-
-            foreach (BasePlayer Player in BasePlayer.activePlayerList)
-                Player.SendConsoleCommand("chat.add2", 0, player.Id, argMsg, player.Name, allColourData[player.Id]);
 
             Interface.Oxide.LogInfo(GetMessage("LogInfo", player, player.Name, bPlayer.net.ID.ToString(), player.Id, argMsg));
             return true;
@@ -236,10 +256,14 @@ namespace Oxide.Plugins
         #region Helpers
         bool BetterChatIns() => (BetterChat != null);
         bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success;
+
         string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args); 
+
         bool HasPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permUse));
         bool CanBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permBypass));
         bool CanSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permSetOthers));
+        bool CanRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permRandomColour));
+
         bool IsValid(string input)
         {
             if (config.UseBlacklist)
@@ -261,6 +285,17 @@ namespace Oxide.Plugins
                 if (serverPlayer != null)
                     serverPlayer.Reply(GetMessage("ColourRemoved", serverPlayer));
                 player.Reply(GetMessage("ColourRemoved", player));
+                return false;
+            }
+            if (colLower == "random" && (CanRandomColour(player) || serverPlayer != null))
+            {
+                colLower = GetRndColour();
+                ChangeColour(player, colLower);
+                player.Reply(GetMessage("RndColour", player, colLower));
+                if (serverPlayer != null)
+                {
+                    serverPlayer.Reply(GetMessage("ConsoleRndColour", serverPlayer, player.Name, colLower));
+                }
                 return false;
             }
             string invalidChar;
@@ -286,6 +321,7 @@ namespace Oxide.Plugins
             }
             return true;
         }
+        string GetRndColour() => String.Format("#{0:X6}", new System.Random().Next(0x1000000));
         string IsInvalidCharacter(string input) => (config.blockedValues.Where(x => input.Contains(x)).FirstOrDefault()) ?? null;
         #endregion
     }
