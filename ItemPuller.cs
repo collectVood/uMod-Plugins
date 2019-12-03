@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.2.2")]
+    [Info("Item Puller", "collect_vood", "1.2.3")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : CovalencePlugin
     {
@@ -66,6 +66,8 @@ namespace Oxide.Plugins
             public bool pullOnBuild = true;
             [JsonProperty("Check for Owner")]
             public bool checkForOwner = false;
+            [JsonProperty("Check for Team")]
+            public bool checkForTeam = false;
             [JsonProperty("Check for Friend")]
             public bool checkForFriends = false;
             [JsonProperty("Check for Clan")]
@@ -632,6 +634,12 @@ namespace Oxide.Plugins
                         {
                             if (config.checkForOwner)
                                 continue;
+                            if (config.checkForTeam)
+                            {
+                                var storageOwner = BasePlayer.FindByID(storageContainer.OwnerID);
+                                if (storageOwner == null) continue;
+                                if (!IsTeamMember(storageOwner, player)) continue;
+                            }
                             if (config.checkForFriends && Friends != null && Friends.IsLoaded)
                             {
                                 if (!(bool)Friends?.Call("AreFriends", player.userID, storageContainer.OwnerID))
@@ -640,24 +648,18 @@ namespace Oxide.Plugins
                             if (config.checkForClans && Clans != null && Clans.IsLoaded)
                             {
                                 string clantag = Clans?.Call("GetClanOf", storageContainer.OwnerID) as string;
-                                if (clantag == null)
-                                    continue;
+                                if (clantag == null) continue;
                                 JObject clan = Clans?.Call("GetClan", clantag) as JObject;
-                                if (clan == null)
-                                    continue;
+                                if (clan == null) continue;
                                 JArray members = clan["members"] as JArray;
-                                if (members == null)
-                                    continue;
-                                if (!members.Contains(player.UserIDString))
-                                    continue;
+                                if (members == null) continue;
+                                if (!members.Contains(player.UserIDString)) continue;
                             }
                         }
-                        if (storageContainer.PrefabName.Contains("cupboard") && !allPlayerSettings[player.userID].fromTC)
-                            continue;
+                        if (storageContainer.PrefabName.Contains("cupboard") && !allPlayerSettings[player.userID].fromTC) continue;
                         foreach (Item item in storageContainer.inventory.itemList)
                         {
-                            if (required == 0)
-                                break;
+                            if (required == 0) break;
                             if (item.info.itemid == itemDef.itemid)
                             {
                                 if (required >= item.amount)
@@ -674,12 +676,16 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-                if (required == 0)
-                    return possibleItems;
-                else
-                    return null;
+                if (required == 0) return possibleItems;
+                else return null;
             }
             return null;
+        }
+        private bool IsTeamMember(BasePlayer player, BasePlayer possibleMember)
+        {
+            if (player.currentTeam == 0 || possibleMember.currentTeam == 0)
+                return false;
+            return player.currentTeam == possibleMember.currentTeam;
         }
         private bool IsFull(BasePlayer player)
         {

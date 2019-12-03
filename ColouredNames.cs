@@ -10,7 +10,7 @@ using ConVar;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Names", "collect_vood", "1.3.9")]
+    [Info("Coloured Names", "collect_vood", "1.3.10")]
     [Description("Allows players to change their name colour in chat")]
     class ColouredNames : CovalencePlugin
     {
@@ -165,9 +165,12 @@ namespace Oxide.Plugins
 
         Dictionary<string, object> OnBetterChat(Dictionary<string, object> dict)
         {
-            string Id = (dict["Player"] as IPlayer).Id;
-            if (!allColourData.ContainsKey(Id)) return dict;
-            ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = allColourData[Id];
+            if (dict != null)
+            {
+                string Id = (dict["Player"] as IPlayer).Id;
+                if (!allColourData.ContainsKey(Id)) return dict;
+                ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = allColourData[Id];
+            }
             return dict;
         }
         #endregion
