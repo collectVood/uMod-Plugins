@@ -11,9 +11,9 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Names", "collect_vood", "1.4.0")]
-    [Description("Allows players to change their name colour in chat")]
-    class ColouredNames : CovalencePlugin
+    [Info("Coloured Messages", "collect_vood", "1.0.0")]
+    [Description("Allows players to change their message colour in chat")]
+    class ColouredMessages : CovalencePlugin
     {
         [PluginReference]
         private Plugin BetterChat, BetterChatMute;
@@ -32,17 +32,17 @@ namespace Oxide.Plugins
                 { "NoGradient", "You don't have permission to use gradients." },
                 { "GradientUsage", "<color=#00AAFF>Incorrect usage!</color><color=#A8A8A8> To use gradients please use /{0} gradient hexCode1 hexCode2 ...</color>" },
                 { "IncorrectGradientUsage", "<color=#00AAFF>Incorrect usage!</color><color=#A8A8A8> A gradient requires at least two different colours!</color>"},
-                { "GradientChanged", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name gradient changed to </color>{0}<color=#A8A8A8>!</color>"},
+                { "GradientChanged", "<color=#00AAFF>ColouredMessages: </color><color=#A8A8A8>Name gradient changed to </color>{0}<color=#A8A8A8>!</color>"},
                 { "IncorrectUsage", "<color=#00AAFF>Incorrect usage!</color><color=#A8A8A8> /colour {{colour}} [player]\nFor a list of colours do /colours</color>" },
                 { "PlayerNotFound", "Player <color=#00AAFF>{0}</color> was not found." },
                 { "SizeBlocked", "You may not try and change your size! You sneaky player..." },
                 { "InvalidCharacters", "The character '{0}' is not allowed in colours. Please remove it." },
-                { "ColourBlocked", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>That colour is blocked.</color>" },
-                { "ColourNotWhitelisted", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>That colour is not whitelisted.</color>"},
-                { "ColourRemoved", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour removed!</color>" },
-                { "ColourChanged", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name colour changed to </color><color={0}>{0}</color><color=#A8A8A8>!</color>" },
-                { "ColourChangedFor", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>{0}'s name colour changed to </color><color={1}>{1}</color><color=#A8A8A8>!</color>" },
-                { "ColoursInfo", "<color=#00AAFF>ColouredNames</color><color=#A8A8A8>\nYou can only use hexcode, eg '</color><color=#FFFF00>#FFFF00</color><color=#A8A8A8>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\nAn invalid colour will default to </color>white<color=#A8A8A8></color>" },
+                { "ColourBlocked", "<color=#00AAFF>ColouredMessages: </color><color=#A8A8A8>That colour is blocked.</color>" },
+                { "ColourNotWhitelisted", "<color=#00AAFF>ColouredMessages: </color><color=#A8A8A8>That colour is not whitelisted.</color>"},
+                { "ColourRemoved", "<color=#00AAFF>ColouredMessages: </color><color=#A8A8A8>Name colour removed!</color>" },
+                { "ColourChanged", "<color=#00AAFF>ColouredMessages: </color><color=#A8A8A8>Name colour changed to </color><color={0}>{0}</color><color=#A8A8A8>!</color>" },
+                { "ColourChangedFor", "<color=#00AAFF>ColouredMessages: </color><color=#A8A8A8>{0}'s name colour changed to </color><color={1}>{1}</color><color=#A8A8A8>!</color>" },
+                { "ColoursInfo", "<color=#00AAFF>ColouredMessages</color><color=#A8A8A8>\nYou can only use hexcode, eg '</color><color=#FFFF00>#FFFF00</color><color=#A8A8A8>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\nAn invalid colour will default to </color>white<color=#A8A8A8></color>" },
                 { "ConsoleColourIncorrectUsage", "Incorrect usage! colour {{colour}} {{partialNameOrUserid}}" },
                 { "ConsoleColourChanged", "Colour of {0} changed to {1}." },
                 { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." },
@@ -58,25 +58,25 @@ namespace Oxide.Plugins
         private class Configuration
         {
             [JsonProperty(PropertyName = "Colour Command")]
-            public string ColourCommand = "colour";
+            public string ColourCommand = "mcolour";
             [JsonProperty(PropertyName = "Colours Command (Help)")]
-            public string ColoursCommand = "colours";
+            public string ColoursCommand = "mcolours";
             [JsonProperty(PropertyName = "Block messages of muted players (requires BetterChatMute)")]
             public bool blockChatMute = true;
             [JsonProperty(PropertyName = "Show colour permission")]
-            public string permShow = "colourednames.show";
+            public string permShow = "colouredmessages.show";
             [JsonProperty(PropertyName = "Use permission")]
-            public string permUse = "colourednames.use";
+            public string permUse = "colouredmessages.use";
             [JsonProperty(PropertyName = "Use gradient permission")]
-            public string permGradient = "colourednames.gradient";
+            public string permGradient = "colouredmessages.gradient";
             [JsonProperty(PropertyName = "Default Rainbow Name Permission")]
-            public string permRainbow = "colourednames.rainbow";
+            public string permRainbow = "colouredmessages.rainbow";
             [JsonProperty(PropertyName = "Bypass restrictions permission")]
-            public string permBypass = "colourednames.bypass";
+            public string permBypass = "colouredmessages.bypass";
             [JsonProperty(PropertyName = "Set others colour permission")]
-            public string permSetOthers = "colourednames.setothers";
+            public string permSetOthers = "colouredmessages.setothers";
             [JsonProperty(PropertyName = "Get random colour permission")]
-            public string permRandomColour = "colourednames.rndcolour";
+            public string permRandomColour = "colouredmessages.rndcolour";
             [JsonProperty(PropertyName = "Use Blacklist")]
             public bool UseBlacklist = true;
             [JsonProperty(PropertyName = "Rainbow Colours")]
@@ -173,7 +173,7 @@ namespace Oxide.Plugins
             {
                 foreach (BasePlayer Player in BasePlayer.activePlayerList)
                 {
-                    Player.SendConsoleCommand("chat.add2", 0, player.userID, message, isGradient ? allColourData[player.UserIDString] : player.displayName, isGradient ? "#5af" : allColourData[player.UserIDString]);
+                    Player.SendConsoleCommand("chat.add2", 0, player.userID, message, player.displayName);
                 }
                 DebugEx.Log(string.Concat("[CHAT] ", formattedMsg, " : ", message), StackTraceLogType.None);
             }
