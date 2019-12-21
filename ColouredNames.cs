@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Names", "collect_vood", "1.3.13")]
+    [Info("Coloured Names", "collect_vood", "1.4.0")]
     [Description("Allows players to change their name colour in chat")]
     class ColouredNames : CovalencePlugin
     {
@@ -29,6 +29,9 @@ namespace Oxide.Plugins
             {
                 { "NoPermission", "You don't have permission to use this command." },
                 { "NoPermissionSetOthers", "You don't have permission to set other players colours." },
+                { "NoGradient", "You don't have permission to use gradients." },
+                { "GradientUsage", "To use gradients please use /{0} gradient hexCode1 hexCode2 ..." },
+                { "GradientChanged", "<color=#00AAFF>ColouredNames: </color><color=#A8A8A8>Name gradient changed to </color>{0}<color=#A8A8A8>!</color>"},
                 { "IncorrectUsage", "<color=#00AAFF>Incorrect usage!</color><color=#A8A8A8> /colour {{colour}} [player]\nFor a list of colours do /colours</color>" },
                 { "PlayerNotFound", "Player <color=#00AAFF>{0}</color> was not found." },
                 { "SizeBlocked", "You may not try and change your size! You sneaky player..." },
@@ -59,8 +62,12 @@ namespace Oxide.Plugins
             public string ColoursCommand = "colours";
             [JsonProperty(PropertyName = "Block messages of muted players (requires BetterChatMute)")]
             public bool blockChatMute = true;
+            [JsonProperty(PropertyName = "Show colour permission")]
+            public string permShow = "colourednames.show";
             [JsonProperty(PropertyName = "Use permission")]
             public string permUse = "colourednames.use";
+            [JsonProperty(PropertyName = "Use gradient permission")]
+            public string permGradient = "colourednames.gradient";
             [JsonProperty(PropertyName = "Bypass restrictions permission")]
             public string permBypass = "colourednames.bypass";
             [JsonProperty(PropertyName = "Set others colour permission")]
@@ -121,6 +128,7 @@ namespace Oxide.Plugins
         #region Hooks
         private void Init()
         {
+            permission.RegisterPermission(config.permShow, this);
             permission.RegisterPermission(config.permUse, this);
             permission.RegisterPermission(config.permBypass, this);
             permission.RegisterPermission(config.permSetOthers, this);
@@ -137,7 +145,7 @@ namespace Oxide.Plugins
             if (BetterChatIns()) return null;
             if (config.blockChatMute && BetterChatMuteIns()) if (BetterChatMute.Call<bool>("API_IsMuted", player.IPlayer)) return null;
             if (player == null) return null;            
-            if (!allColourData.ContainsKey(player.UserIDString) || !HasPerm(player.IPlayer)) return null;
+            if (!allColourData.ContainsKey(player.UserIDString) || !HasShowPerm(player.IPlayer)) return null;
 
             if (Chat.serverlog)
             {
@@ -197,6 +205,10 @@ namespace Oxide.Plugins
         #endregion
 
         #region Commands
+        void cmdGradient(IPlayer player, string cmd, string[] args)
+        {
+            player.Reply(ProcessGradientName(player.Name, args));
+        }
         void cmdColourCommand(IPlayer player, string cmd, string[] args)
         {
             string colLower = string.Empty;
@@ -228,6 +240,22 @@ namespace Oxide.Plugins
             if (args.Length == 0)
             {
                 player.Reply(GetMessage("IncorrectUsage", player));
+                return;
+            }
+            if (args[0] == "gradient")
+            {
+                if (!CanGradient(player))
+                {
+                    player.Reply(GetMessage("NoGradient", player));
+                    return;
+                }
+                string gradientName = ProcessGradientName(player.Name, args.Skip(1).ToArray());
+                if (gradientName.Equals(string.Empty))
+                {
+                    player.Reply(GetMessage("GradientUsage", player, config.ColourCommand));
+                    return;
+                }
+                player.Reply(GetMessage("GradientChanged", player, gradientName));
                 return;
             }
             colLower = args[0].ToLower();
@@ -280,8 +308,9 @@ namespace Oxide.Plugins
         bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success;
 
         string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
-        //player.IsAdmin || 
-        bool HasPerm(IPlayer player) => (permission.UserHasPermission(player.Id, config.permUse));
+        bool HasShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permShow));
+        bool HasPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permUse));
+        bool CanGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permGradient));
         bool CanBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permBypass));
         bool CanSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permSetOthers));
         bool CanRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.permRandomColour));
@@ -332,6 +361,49 @@ namespace Oxide.Plugins
                 return false;
             }
             return true;
+        }
+        public string ProcessGradientName(string name, string[] colourArgs)
+        {
+            colourArgs = colourArgs.Where(col => IsValid(col) && IsValidColour(col)).ToArray();
+
+            var chars = name.ToCharArray();
+
+            int gradientsSteps = chars.Length / (colourArgs.Length - 1);
+            int gradientIterations = chars.Length / gradientsSteps;
+            string gradientName = string.Empty;
+
+            var colours = new List<Color>();
+            Color startColour;
+            Color endColour;
+
+            for (int i = 0; i < gradientIterations; i++)
+            {
+                ColorUtility.TryParseHtmlString(colourArgs[i], out startColour);
+                if (i >= colourArgs.Length - 1) endColour = startColour;
+                else ColorUtility.TryParseHtmlString(colourArgs[i + 1], out endColour);
+
+                foreach (var c in GetGradients(startColour, endColour, gradientsSteps)) colours.Add(c);
+                if (colourArgs.Length - 1 == i && colours.Count < chars.Length) while (colours.Count < chars.Length) colours.Add(endColour);
+            }
+            for (int i = 0; i < colours.Count; i++)
+            {
+                gradientName += $"<color=#{ColorUtility.ToHtmlStringRGB(colours[i])}>{chars[i]}</color>";
+            }
+            return gradientName;
+        }
+        public List<Color> GetGradients(Color start, Color end, int steps)
+        {
+            var colours = new List<Color>();
+
+            float stepR = ((end.r - start.r) / (steps - 1));
+            float stepG = ((end.g - start.g) / (steps - 1));
+            float stepB = ((end.b - start.b) / (steps - 1));
+
+            for (int i = 0; i < steps; i++)
+            {
+                colours.Add(new Color(start.r + (stepR * i), start.g + (stepG * i), start.b + (stepB * i)));
+            }
+            return colours;
         }
         string GetRndColour() => String.Format("#{0:X6}", new System.Random().Next(0x1000000));
         string IsInvalidCharacter(string input) => (config.blockedValues.Where(x => input.Contains(x)).FirstOrDefault()) ?? null;
