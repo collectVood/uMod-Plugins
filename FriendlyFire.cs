@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Friendly Fire", "collect_vood", "1.1.1")]
+    [Info("Friendly Fire", "collect_vood", "1.1.2")]
     [Description("Gives you the ability to enable or disable friendly fire player based")]
     class FriendlyFire : CovalencePlugin
     {
@@ -126,7 +126,7 @@ namespace Oxide.Plugins
             CreatePlayerSettings(victim);
             if (!allPlayerSettings[attacker.Id].ff || !allPlayerSettings[victim.Id].ff)
             {
-                if ((config.isTeamMemberCheck && IsTeamMember(player, victimBP)) || (config.isFriendCheck && (Friends?.Call<bool>("AreFriendsS", attacker.Id, victim.Id) ?? false)) || (config.isClanMemberCheck && IsClanMember(player, victimBP)))
+                if ((config.isTeamMemberCheck && IsTeamMember(player, victimBP)) || (config.isFriendCheck && (Friends?.Call<bool>("AreFriends", attacker.Id, victim.Id) ?? false)) || (config.isClanMemberCheck && IsClanMember(player, victimBP)))
                 {
                     if (config.SendMessages)
                     {
