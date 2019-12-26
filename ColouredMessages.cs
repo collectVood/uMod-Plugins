@@ -32,21 +32,22 @@ namespace Oxide.Plugins
                 { "NoPermissionGradient", "You don't have permission to use gradients." },
                 { "IncorrectGradientUsage", "Incorrect usage! To use gradients please use /{0} gradient hexCode1 hexCode2 ...</color>" },
                 { "IncorrectGradientUsageArgs", "Incorrect usage! A gradient requires at least two different colours!"},
-                { "GradientChanged", "Name gradient changed to {0}!"},
+                { "GradientChanged", "Message gradient changed to {0}!"},
                 { "GradientChangedFor", "{0}'s gradient colour changed to {1}!"},
                 { "IncorrectUsage", "Incorrect usage! /{0} <colour>\nFor a list of colours do /colours" },
                 { "IncorrectSetUsage", "Incorrect set usage! /{0} set <playerIdOrName> <colourOrColourArgument>\nFor a list of colours do /colours" },
                 { "PlayerNotFound", "Player {0} was not found." },
                 { "InvalidCharacters", "The character '{0}' is not allowed in colours. Please remove it." },
-                { "ColourRemoved", "Name colour removed!" },
-                { "ColourRemovedFor", "{0}'s name colour was removed!" },
-                { "ColourChanged", "Name colour changed to <color={0}>{0}</color>!" },
-                { "ColourChangedFor", "{0}'s name colour changed to <color={1}>{1}</color>!" },
+                { "ColourRemoved", "Message colour removed!" },
+                { "ColourRemovedFor", "{0}'s message colour was removed!" },
+                { "ColourChanged", "Message colour changed to <color={0}>{0}</color>!" },
+                { "ColourChangedFor", "{0}'s message colour changed to <color={1}>{1}</color>!" },
                 { "ColoursInfo", "You can only use hexcode, eg '<color=#FFFF00>#FFFF00</color>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\n\n{0}" },
                 { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." },
                 { "RndColour", "Colour was randomized to <color={0}>{0}</color>" },
                 { "RndColourFor", "Colour of {0} randomized to {1}."},
-                { "RconLogFormat", "{0}[{1}]"}
+                { "RconLogFormat", "{0}[{1}]"},
+                { "ExampleMessage", "An Example Message" }
             }, this);
         }
         #endregion
@@ -110,35 +111,38 @@ namespace Oxide.Plugins
 
         #region Data
         private StoredData storedData;
-        private Dictionary<string, string> allColourData => storedData.AllColourData;
+        private Dictionary<string, MessageData> allColourData => storedData.AllColourData;
 
         private class StoredData
         {
-            public Dictionary<string, string> AllColourData { get; private set; } = new Dictionary<string, string>();
+            public Dictionary<string, MessageData> AllColourData { get; private set; } = new Dictionary<string, MessageData>();
         }
 
+        public class MessageData
+        {
+            public string Colour;
+            public bool IsGradient;
+            public string[] ColourArgs;
+
+            public MessageData(string colour, bool isGradient = false, string[] colourArgs = null)
+            {
+                Colour = colour;
+                IsGradient = isGradient;
+                ColourArgs = colourArgs;
+            }
+        }
         private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
         private void OnServerSave() => SaveData();
         private void Unload() => SaveData();
 
-        private void ChangeColour(IPlayer target, string newColour)
+        private void ChangeColour(IPlayer target, string newColour, bool isGradient = false)
         {
-            if (!allColourData.ContainsKey(target.Id)) allColourData.Add(target.Id, "");
-            allColourData[target.Id] = newColour;
+            if (!allColourData.ContainsKey(target.Id)) allColourData.Add(target.Id, new MessageData(newColour, isGradient));
+            else allColourData[target.Id] = new MessageData(newColour, isGradient);
         }
         #endregion
 
         #region Hooks
-        Dictionary<string, object> OnColouredNames(Dictionary<string, object> dict)
-        {
-            if (dict != null)
-            {
-                IPlayer player = dict["Player"] as IPlayer;
-                dict["Message"] = allColourData[player.Id];
-            }
-            return dict;
-        }
-
         private void Init()
         {
             permission.RegisterPermission(config.permShow, this);
@@ -160,10 +164,12 @@ namespace Oxide.Plugins
             if (ColouredNamesIns()) return null;
             if (BetterChatIns()) return null;
             if (config.blockChatMute && BetterChatMuteIns()) if (BetterChatMute.Call<bool>("API_IsMuted", player.IPlayer)) return null;
-            if (player == null) return null;      
-            
+            if (player == null) return null;
+
+            string modifiedMessage = message;
+
             if ((!allColourData.ContainsKey(player.UserIDString) && !HasRainbow(player.IPlayer)) || !HasShowPerm(player.IPlayer)) return null;
-            if (!allColourData.ContainsKey(player.UserIDString) && HasRainbow(player.IPlayer)) allColourData.Add(player.UserIDString, ProcessGradientName(player.displayName, config.rainbowColours));
+            if (!allColourData.ContainsKey(player.UserIDString) && HasRainbow(player.IPlayer)) modifiedMessage = ProcessGradientMessage(message, config.rainbowColours);
 
             if (Chat.serverlog)
             {
@@ -175,15 +181,18 @@ namespace Oxide.Plugins
             }
             string formattedMsg = GetMessage("RconLogFormat", player.IPlayer, player.displayName.EscapeRichText(), player.UserIDString);
 
-            bool isGradient = false;
-            string color = allColourData[player.UserIDString];
-            if (color.Contains("<color=#")) isGradient = true;
+            if (allColourData.ContainsKey(player.UserIDString))
+            {
+                MessageData messageData = allColourData[player.UserIDString];
+                if (!messageData.IsGradient) modifiedMessage = ProcessColourMessage(message, messageData.Colour);
+                else modifiedMessage = ProcessGradientMessage(message, messageData.ColourArgs);
+            }
 
             if (channel == Chat.ChatChannel.Global)
             {
                 foreach (BasePlayer Player in BasePlayer.activePlayerList)
                 {
-                    Player.SendConsoleCommand("chat.add2", 0, player.userID, message, isGradient ? allColourData[player.UserIDString] : player.displayName, isGradient ? "#5af" : allColourData[player.UserIDString]);
+                    Player.SendConsoleCommand("chat.add2", 0, player.userID, modifiedMessage, player.displayName, "#5af");
                 }
                 DebugEx.Log(string.Concat("[CHAT] ", formattedMsg, " : ", message), StackTraceLogType.None);
             }
@@ -194,7 +203,7 @@ namespace Oxide.Plugins
                     BasePlayer member;
                     if ((member = BasePlayer.FindByID(memberId)) != null)
                     {
-                        member.SendConsoleCommand("chat.add2", 1, player.userID, message, isGradient ? allColourData[player.UserIDString] : player.displayName, isGradient ? "#5af" : allColourData[player.UserIDString]);
+                        member.SendConsoleCommand("chat.add2", 1, player.userID, modifiedMessage, player.displayName, "#5af");
                     }
                 }
                 DebugEx.Log(string.Concat("[TEAM CHAT] ", formattedMsg, " : ", message), StackTraceLogType.None);
@@ -207,7 +216,7 @@ namespace Oxide.Plugins
                 Message = message,
                 UserId = player.UserIDString,
                 Username = player.displayName,
-                Color = allColourData[player.UserIDString],
+                Color = "#5af",
                 Time = Facepunch.Math.Epoch.Current
             };
             Facepunch.RCon.Broadcast(Facepunch.RCon.LogType.Chat, chatentry);          
@@ -218,16 +227,34 @@ namespace Oxide.Plugins
         {
             if (dict != null)
             {
+                string message = dict["Message"].ToString();
                 IPlayer player = dict["Player"] as IPlayer;
                 if (!allColourData.ContainsKey(player.Id) && !HasRainbow(player) || !HasShowPerm(player)) return dict;
-                if (!allColourData.ContainsKey(player.Id) && HasRainbow(player)) allColourData.Add(player.Id, ProcessGradientName(player.Name, config.rainbowColours));
+                if (!allColourData.ContainsKey(player.Id) && HasRainbow(player)) dict["Message"] = ProcessGradientMessage(message, config.rainbowColours);
+                if (allColourData.ContainsKey(player.Id))
+                {
+                    MessageData messageData = allColourData[player.Id];
+                    if (!messageData.IsGradient) dict["Message"] = ProcessColourMessage(message, messageData.Colour);
+                    else dict["Message"] = ProcessGradientMessage(message, messageData.ColourArgs);
+                }
+            }
+            return dict;
+        }
 
-                bool isGradient = false;
-                string color = allColourData[player.Id];
-                if (color.Contains("<color=#")) isGradient = true;
-
-                if (isGradient) dict["Username"] = allColourData[player.Id];
-                if (!isGradient) ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = allColourData[player.Id];
+        Dictionary<string, object> OnColouredNames(Dictionary<string, object> dict)
+        {
+            if (dict != null)
+            {
+                string message = dict["Message"].ToString();
+                IPlayer player = dict["Player"] as IPlayer;
+                if (!allColourData.ContainsKey(player.Id) && !HasRainbow(player) || !HasShowPerm(player)) return dict;
+                if (!allColourData.ContainsKey(player.Id) && HasRainbow(player)) dict["Message"] = ProcessGradientMessage(message, config.rainbowColours);
+                if (allColourData.ContainsKey(player.Id))
+                {
+                    MessageData messageData = allColourData[player.Id];
+                    if (!messageData.IsGradient) dict["Message"] = ProcessColourMessage(message, messageData.Colour);
+                    else dict["Message"] = ProcessGradientMessage(message, messageData.ColourArgs);
+                }
             }
             return dict;
         }
@@ -346,15 +373,15 @@ namespace Oxide.Plugins
                     player.Reply(GetMessage("IncorrectGradientUsageArgs", player));
                     return;
                 }
-                string gradientName = ProcessGradientName(target.Name, colours);
-                if (gradientName.Equals(string.Empty))
+                string exampleGradientMessage = ProcessGradientMessage(GetMessage("ExampleMessage", player), colours);
+                if (exampleGradientMessage.Equals(string.Empty))
                 {
                     player.Reply(GetMessage("IncorrectGradientUsage", player, config.ColourCommand));
                     return;
                 }
-                allColourData[target.Id] = gradientName;
-                target.Reply(GetMessage("GradientChanged", target, gradientName));
-                if (isCalledOnto) player.Reply(GetMessage("GradientChangedFor", player, target.Name, gradientName));
+                allColourData[target.Id] = new MessageData(string.Empty, true, colours);
+                target.Reply(GetMessage("GradientChanged", target, exampleGradientMessage));
+                if (isCalledOnto) player.Reply(GetMessage("GradientChangedFor", player, target.Name, exampleGradientMessage));
                 return;
             }
             if (colLower == "reset" || colLower == "clear" || colLower == "remove")
@@ -389,11 +416,11 @@ namespace Oxide.Plugins
             target.Reply(GetMessage("ColourChanged", target, colLower));
             if (isCalledOnto) player.Reply(GetMessage("ColourChangedFor", player, target.Name, colLower));
         }
-        public string ProcessGradientName(string name, string[] colourArgs)
+        string ProcessGradientMessage(string message, string[] colourArgs)
         {
             colourArgs = colourArgs.Where(col => IsValid(col) && IsValidColour(col) && (IsInvalidCharacter(col) == null ? true : false)).ToArray();
 
-            var chars = name.ToCharArray();
+            var chars = message.ToCharArray();
             string gradientName = string.Empty;
 
             var colours = new List<Color>();
@@ -433,7 +460,9 @@ namespace Oxide.Plugins
             }
             return gradientName;
         } 
-        public List<Color> GetGradients(Color start, Color end, int steps)
+        string ProcessColourMessage(string message, string colour) => $"<color={colour}>" + message + "</color>";
+
+        List<Color> GetGradients(Color start, Color end, int steps)
         {
             var colours = new List<Color>();
 
