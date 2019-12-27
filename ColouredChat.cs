@@ -33,6 +33,7 @@ namespace Oxide.Plugins
                 { "NoPermission", "You don't have permission to use this command." },
                 { "NoPermissionSetOthers", "You don't have permission to set other players {0} colours." },
                 { "NoPermissionGradient", "You don't have permission to use {0} gradients." },
+                { "NoPermissionRandom", "You don't have permission to use random {0} colours." },
                 { "IncorrectGradientUsage", "Incorrect usage! To use gradients please use /{0} gradient hexCode1 hexCode2 ...</color>" },
                 { "IncorrectGradientUsageArgs", "Incorrect usage! A gradient requires at least two different colours!"},
                 { "GradientChanged", "{0} gradient changed to {1}!"},
@@ -75,19 +76,19 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Name colours command (Help)")]
             public string nameColoursCommand = "colours";
             [JsonProperty(PropertyName = "Name show colour permission")]
-            public string namePermShow = "colouredchat.nameshow";
-            [JsonProperty(PropertyName = "Name show use permission")]
-            public string namePermUse = "colouredchat.nameuse";
+            public string namePermShow = "colouredchat.name.show";
+            [JsonProperty(PropertyName = "Name use permission")]
+            public string namePermUse = "colouredchat.name.use";
             [JsonProperty(PropertyName = "Name use gradient permission")]
-            public string namePermGradient = "colouredchat.namegradient";
-            [JsonProperty(PropertyName = "Name default Rainbow Name Permission")]
-            public string namePermRainbow = "colouredchat.namerainbow";
+            public string namePermGradient = "colouredchat.name.gradient";
+            [JsonProperty(PropertyName = "Name default rainbow name permission")]
+            public string namePermRainbow = "colouredchat.name.rainbow";
             [JsonProperty(PropertyName = "Name bypass restrictions permission")]
-            public string namePermBypass = "colouredchat.namebypass";
+            public string namePermBypass = "colouredchat.name.bypass";
             [JsonProperty(PropertyName = "Name set others colour permission")]
-            public string namePermSetOthers = "colouredchat.namesetothers";
+            public string namePermSetOthers = "colouredchat.name.setothers";
             [JsonProperty(PropertyName = "Name get random colour permission")]
-            public string namePermRandomColour = "colouredchat.namerndcolour";
+            public string namePermRandomColour = "colouredchat.name.random";
             [JsonProperty(PropertyName = "Name use blacklist")]
             public bool nameUseBlacklist = true;
             [JsonProperty(PropertyName = "Name blocked colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
@@ -109,22 +110,22 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Message colours command (Help)")]
             public string messageColoursCommand = "mcolours";
             [JsonProperty(PropertyName = "Message show colour permission")]
-            public string messagePermShow = "colouredchat.messageshow";
+            public string messagePermShow = "colouredchat.message.show";
             [JsonProperty(PropertyName = "Message use permission")]
-            public string messagePermUse = "colouredchat.messageuse";
+            public string messagePermUse = "colouredchat.message.use";
             [JsonProperty(PropertyName = "Message use gradient permission")]
-            public string messagePermGradient = "colouredchat.messagegradient";
-            [JsonProperty(PropertyName = "Message default Rainbow Name Permission")]
-            public string messagePermRainbow = "colouredchat.messagerainbow";
+            public string messagePermGradient = "colouredchat.message.gradient";
+            [JsonProperty(PropertyName = "Message default rainbow name permission")]
+            public string messagePermRainbow = "colouredchat.message.rainbow";
             [JsonProperty(PropertyName = "Message bypass restrictions permission")]
-            public string messagePermBypass = "colouredchat.messagebypass";
+            public string messagePermBypass = "colouredchat.message.bypass";
             [JsonProperty(PropertyName = "Message set others colour permission")]
-            public string messagePermSetOthers = "colouredchat.messagesetothers";
+            public string messagePermSetOthers = "colouredchat.message.setothers";
             [JsonProperty(PropertyName = "Message get random colour permission")]
-            public string messagePermRandomColour = "colouredchat.messagerndcolour";
+            public string messagePermRandomColour = "colouredchat.message.random";
             [JsonProperty(PropertyName = "Message use blacklist")]
             public bool messageUseBlacklist = true;
-            [JsonProperty(PropertyName = "Message blocked Colours Hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Message blocked colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> messageBlockColoursHex = new List<string>
             {
                 { "#000000" }
@@ -291,15 +292,15 @@ namespace Oxide.Plugins
             string playerMessage = message;
 
             //Gradient Handling & Caching
-            if (playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0)
+            if (HasNameShowPerm(player.IPlayer) && (playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0))
             {
                 if (!cachedNames.ContainsKey(player.UserIDString)) cachedNames.Add(player.UserIDString, ProcessGradient(player.displayName, playerData.NameGradientArgs));
                 playerUserName = cachedNames[player.UserIDString];
             }
-            else if (!string.IsNullOrEmpty(playerData.NameColour)) playerColour = playerData.NameColour;
+            else if (HasNameShowPerm(player.IPlayer) && !string.IsNullOrEmpty(playerData.NameColour)) playerColour = playerData.NameColour;
 
-            if (playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs);
-            else if (!string.IsNullOrEmpty(playerData.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
+            if (HasMessageShowPerm(player.IPlayer) && (playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0)) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs);
+            else if (HasMessageShowPerm(player.IPlayer) && !string.IsNullOrEmpty(playerData.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
 
             var colouredChatMessage = new ColouredChatMessage(player.IPlayer, playerUserName, playerColour, playerMessage);
             var colouredChatMessageDict = colouredChatMessage.ToDictionary();
@@ -316,7 +317,7 @@ namespace Oxide.Plugins
                     }
                     catch (Exception e)
                     {
-                        PrintError($"Failed to load modified OnBetterChat hook data from plugin '{plugin.Title} ({plugin.Version})':{Environment.NewLine}{e}");
+                        PrintError($"Failed to load modified OnColouredChat hook data from plugin '{plugin.Title} ({plugin.Version})':{Environment.NewLine}{e}");
                         continue;
                     }
                 }
@@ -454,7 +455,7 @@ namespace Oxide.Plugins
             {
                 if ((!isMessage && !CanNameSetOthers(player)) || (isMessage && !CanMessageSetOthers(player)))
                 {
-                    player.Reply(GetMessage("NoPermissionSetOthers", player));
+                    player.Reply(GetMessage("NoPermissionSetOthers", player, isMessage ? "message" : "name"));
                     return;
                 }
                 if (args.Length < 3)
@@ -591,8 +592,13 @@ namespace Oxide.Plugins
                 if (isCalledOnto) player.Reply(GetMessage("ColourRemovedFor", player, target.Name, isMessage ? "message" : "name"));
                 return;
             }
-            if (colLower == "random" && (!isMessage && CanNameRandomColour(player) || isMessage && CanMessageRandomColour(player)))
+            if (colLower == "random")
             {
+                if (!isMessage && !CanNameRandomColour(player) || isMessage && !CanMessageRandomColour(player))
+                {
+                    player.Reply(GetMessage("NoPermissionRandom", player, isMessage ? "message" : "name"));
+                    return;
+                }
                 colLower = GetRndColour();
                 if (isMessage) ChangeMessageColour(target, colLower, null);
                 else ChangeNameColour(target, colLower, null);
