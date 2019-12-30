@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.1.1")]
+    [Info("Coloured Chat", "collect_vood", "2.1.2")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -819,7 +819,7 @@ namespace Oxide.Plugins
             foreach (var colData in copy)
             {
                 if (colData.Value.LastActive == 0) continue;
-                if (colData.Value.LastActive + (config.inactivityRemovalTime * 3600) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) allColourData.Remove(colData.Key);
+                if (colData.Value.LastActive + (config.inactivityRemovalTime * 86400) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) allColourData.Remove(colData.Key);
             }
         }
 
