@@ -11,12 +11,12 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.1.2")]
+    [Info("Coloured Chat", "collect_vood", "2.1.3")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
         [PluginReference]
-        private Plugin BetterChat, BetterChatMute;
+        private Plugin BetterChat, BetterChatMute, ZoneManager;
 
         #region Constants
 
@@ -38,7 +38,7 @@ namespace Oxide.Plugins
                 { "IncorrectGradientUsageArgs", "Incorrect usage! A gradient requires at least two different colours!"},
                 { "GradientChanged", "{0} gradient changed to {1}!"},
                 { "GradientChangedFor", "{0}'s gradient {1} colour changed to {2}!"},
-                { "IncorrectUsage", "Incorrect usage! /{0} <colour>\nFor a list of colours do /colours" },
+                { "IncorrectUsage", "Incorrect usage! /{0} <colour>\nFor detailed help do /{1}" },
                 { "IncorrectSetUsage", "Incorrect set usage! /{0} set <playerIdOrName> <colourOrColourArgument>\nFor a list of colours do /colours" },
                 { "PlayerNotFound", "Player {0} was not found." },
                 { "InvalidCharacters", "The character '{0}' is not allowed in colours. Please remove it." },
@@ -46,7 +46,7 @@ namespace Oxide.Plugins
                 { "ColourRemovedFor", "{0}'s {1} colour was removed!" },
                 { "ColourChanged", "{0} colour changed to <color={1}>{1}</color>!" },
                 { "ColourChangedFor", "{0}'s {1} colour changed to <color={2}>{2}</color>!" },
-                { "ColoursInfo", "You can only use hexcode, eg '<color=#FFFF00>#FFFF00</color>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\n\n{0}" },
+                { "ColoursInfo", "You can only use hexcodes, eg '<color=#FFFF00>#FFFF00</color>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\n\nAvailable Commands: {0}\n\n{1}"},
                 { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." },
                 { "RndColour", "{0} colour was randomized to <color={1}>{1}</color>" },
                 { "RndColourFor", "{0} colour of {1} randomized to {2}."},
@@ -298,6 +298,7 @@ namespace Oxide.Plugins
             if (BetterChatIns()) return null;
             if (config.blockChatMute && BetterChatMuteIns()) if (BetterChatMute.Call<bool>("API_IsMuted", player.IPlayer)) return null;
             if (player == null) return null;
+            if (ZoneManagerIns() && ZoneManager.Call<bool>("PlayerHasFlag", player, "nochat")) return false;
 
             bool hasData = allColourData.ContainsKey(player.UserIDString);
 
@@ -490,6 +491,7 @@ namespace Oxide.Plugins
 
         bool BetterChatIns() => (BetterChat != null && BetterChat.IsLoaded);
         bool BetterChatMuteIns() => (BetterChatMute != null && BetterChatMute.IsLoaded);
+        bool ZoneManagerIns() => (ZoneManager != null && ZoneManager.IsLoaded);
         bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success;
         string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
 
@@ -529,7 +531,7 @@ namespace Oxide.Plugins
         {
             if (args.Length < 1)
             {
-                player.Reply(GetMessage("IncorrectUsage", player, isMessage ? config.messageColourCommand : config.nameColourCommand));
+                player.Reply(GetMessage("IncorrectUsage", player, isMessage ? config.messageColourCommand : config.nameColourCommand, isMessage ? config.messageColoursCommand : config.nameColoursCommand));
                 return;
             }
             string colLower = string.Empty;
@@ -594,14 +596,41 @@ namespace Oxide.Plugins
                 player.Reply(GetMessage("NoPermission", player));
                 return;
             }
-            string additionalInfo = string.Empty;
+            string availableCommands = string.Empty;
 
+            if (isMessage)
+            {
+                availableCommands += $"\n/{config.messageColourCommand} <color=#ff0000>#ff0000</color>";
+                if (CanMessageRandomColour(player)) availableCommands += $"\n/{config.messageColourCommand} random";
+                if (CanMessageGradient(player)) availableCommands += $"\n/{config.messageColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>" +
+                                                                     $"\n/{config.messageColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color> <color=#aaff55>#aaff55</color>";
+                if (CanMessageSetOthers(player)) availableCommands += $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff0000>#ff0000</color>" +
+                                                                      $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
+                if (player.IsAdmin) availableCommands += $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff0000>#ff0000</color>" +
+                                                         $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
+                if (HasMessageRainbow(player)) availableCommands += $"\n\nBy default rainbow message colour: {ProcessGradient("Rainbow", config.rainbowColours)}";
+            }
+            else
+            {
+                availableCommands += $"\n/{config.nameColourCommand} <color=#ff0000>#ff0000</color>";
+                if (CanNameRandomColour(player)) availableCommands += $"\n/{config.nameColourCommand} random";
+                if (CanNameGradient(player)) availableCommands += $"\n/{config.nameColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>" +
+                                                                     $"\n/{config.nameColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color> <color=#aaff55>#aaff55</color>";
+                if (CanNameSetOthers(player)) availableCommands += $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff0000>#ff0000</color>" +
+                                                                      $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
+                if (player.IsAdmin) availableCommands += $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff0000>#ff0000</color>" +
+                                                         $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
+                if (HasNameRainbow(player)) availableCommands += $"\n\nBy default rainbow name colour: {ProcessGradient(player.Name, config.rainbowColours)}";
+            }
+
+            string additionalInfo = string.Empty;
+                
             if (isMessage && config.messageUseWhitelist)
             {
                 additionalInfo += "Whitelisted Colours:\n";
                 foreach (string colour in config.messageWhitelistedColoursHex)
                 {
-                    additionalInfo += "- " + colour + "\n";
+                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
                 }
             }
             else if (isMessage && config.messageUseBlacklist)
@@ -609,7 +638,7 @@ namespace Oxide.Plugins
                 additionalInfo += "Blacklisted Colours:\n";
                 foreach (string colour in config.messageBlockColoursHex)
                 {
-                    additionalInfo += "- " + colour + "\n";
+                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
                 }
             }
             else if (!isMessage && config.nameUseWhitelist)
@@ -617,7 +646,7 @@ namespace Oxide.Plugins
                 additionalInfo += "Whitelisted Colours:\n";
                 foreach (string colour in config.nameWhitelistedColoursHex)
                 {
-                    additionalInfo += "- " + colour + "\n";
+                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
                 }
             }
             else if (!isMessage && config.nameUseBlacklist)
@@ -625,11 +654,11 @@ namespace Oxide.Plugins
                 additionalInfo += "Blacklisted Colours:\n";
                 foreach (string colour in config.nameBlockColoursHex)
                 {
-                    additionalInfo += "- " + colour + "\n";
+                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
                 }
             }
 
-            player.Reply(GetMessage("ColoursInfo", player, additionalInfo));
+            player.Reply(GetMessage("ColoursInfo", player, availableCommands, additionalInfo));
         }
 
         string ProcessColourMessage(string message, string colour) => $"<color={colour}>" + message + "</color>";
@@ -642,7 +671,7 @@ namespace Oxide.Plugins
             if (player != target && !isGroup) isCalledOnto = true;
 
             string key = isGroup ? groupName : target.Id;
-
+            
             if (!isGroup && !allColourData.ContainsKey(target.Id)) allColourData.Add(target.Id, new PlayerData());
             else if (isGroup && !allColourData.ContainsKey(groupName)) allColourData.Add(groupName, new PlayerData(true));
 
@@ -681,7 +710,7 @@ namespace Oxide.Plugins
                 }
                 if (isGroup) ClearCache();
 
-                target.Reply(GetMessage("GradientChanged", target, GetCorrectLang(isGroup, isMessage, key), gradientName));
+                if (target.IsConnected) target.Reply(GetMessage("GradientChanged", target, GetCorrectLang(isGroup, isMessage, key), gradientName));
                 if (isCalledOnto) player.Reply(GetMessage("GradientChangedFor", player, target.Name, isMessage ? "message" : "name", gradientName));
                 return;
             }
@@ -701,7 +730,7 @@ namespace Oxide.Plugins
                 if (string.IsNullOrEmpty(allColourData[key].NameColour) && allColourData[key].NameGradientArgs == null && string.IsNullOrEmpty(allColourData[key].MessageColour) && allColourData[key].MessageGradientArgs == null) allColourData.Remove(key);
                 if (isGroup) ClearCache();
 
-                target.Reply(GetMessage("ColourRemoved", target, GetCorrectLang(isGroup, isMessage, key)));
+                if (target.IsConnected) target.Reply(GetMessage("ColourRemoved", target, GetCorrectLang(isGroup, isMessage, key)));
                 if (isCalledOnto) player.Reply(GetMessage("ColourRemovedFor", player, target.Name, isMessage ? "message" : "name"));
                 return;
             }
@@ -717,7 +746,7 @@ namespace Oxide.Plugins
                 else ChangeNameColour(key, colLower, null);
                 if (isGroup) ClearCache();
 
-                target.Reply(GetMessage("RndColour", target, GetCorrectLang(isGroup, isMessage, key), colLower));
+                if (target.IsConnected) target.Reply(GetMessage("RndColour", target, GetCorrectLang(isGroup, isMessage, key), colLower));
                 if (isCalledOnto) player.Reply(GetMessage("RndColourFor", player, isMessage ? "Message" : "Name", target.Name, colLower));
                 return;
             }
@@ -742,8 +771,8 @@ namespace Oxide.Plugins
             else ChangeNameColour(key, colLower, null);
 
             if (isCalledOnto) player.Reply(GetMessage("ColourChangedFor", player, target.Name, isMessage ? "message" : "name", colLower));
-            else if (isGroup) target.Reply(GetMessage("ColourChangedFor", player, key, isMessage ? "message" : "name", colLower));
-            else target.Reply(GetMessage("ColourChanged", target, isMessage ? "Message" : "Name", colLower));
+            else if (isGroup && target.IsConnected) target.Reply(GetMessage("ColourChangedFor", player, key, isMessage ? "message" : "name", colLower));
+            else if (target.IsConnected) target.Reply(GetMessage("ColourChanged", target, isMessage ? "Message" : "Name", colLower));
             if (isGroup) ClearCache();
         }
 
@@ -757,7 +786,9 @@ namespace Oxide.Plugins
             var colours = new List<Color>();
             Color startColour;
             Color endColour;
-            int gradientsSteps = chars.Length / (colourArgs.Length - 1);
+            int gradientsSteps = 0;
+            if (colourArgs.Length - 1 != 0) gradientsSteps = chars.Length / (colourArgs.Length - 1);
+
             if (gradientsSteps <= 1)
             {
                 for (int i = 0; i < chars.Length; i++)
