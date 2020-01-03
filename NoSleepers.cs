@@ -6,7 +6,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("NoSleepers", "Wulf/lukespragg; collect_vood", "0.5.0", ResourceId = 1452)]
+    [Info("NoSleepers", "collect_vood", "0.5.1", ResourceId = 1452)]
     [Description("Prevents players from sleeping and optionally removes player corpses and bags")]
 
     class NoSleepers : CovalencePlugin
