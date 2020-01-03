@@ -6,7 +6,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("NoSleepers", "collect_vood", "0.5.1", ResourceId = 1452)]
+    [Info("NoSleepers", "collect_vood", "0.5.2", ResourceId = 1452)]
     [Description("Prevents players from sleeping and optionally removes player corpses and bags")]
 
     class NoSleepers : CovalencePlugin
@@ -172,7 +172,11 @@ namespace Oxide.Plugins
         {
             if (player.IsDead() && !permission.UserHasPermission(player.UserIDString, config.permExclude))
             {
-                if (!allPlayerData.ContainsKey(player.UserIDString)) player.Respawn();
+                if (!allPlayerData.ContainsKey(player.UserIDString))
+                {
+                    player.Respawn();
+                    return;
+                }
 
                 var playerData = allPlayerData[player.UserIDString];
                 if (playerData._lastPosition != Vector3.zero) player.RespawnAt(playerData._lastPosition, new Quaternion());
