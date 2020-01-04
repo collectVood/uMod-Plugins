@@ -6,7 +6,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("NoSleepers", "collect_vood", "0.5.2", ResourceId = 1452)]
+    [Info("NoSleepers", "collect_vood", "0.5.3")]
     [Description("Prevents players from sleeping and optionally removes player corpses and bags")]
 
     class NoSleepers : CovalencePlugin
@@ -166,29 +166,29 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Methods
-
-        void OnPlayerInit(BasePlayer player)
-        {
-            if (player.IsDead() && !permission.UserHasPermission(player.UserIDString, config.permExclude))
-            {
-                if (!allPlayerData.ContainsKey(player.UserIDString))
-                {
-                    player.Respawn();
-                    return;
-                }
-
-                var playerData = allPlayerData[player.UserIDString];
-                if (playerData._lastPosition != Vector3.zero) player.RespawnAt(playerData._lastPosition, new Quaternion());
-                else player.Respawn();
-
-                if (playerData._playerItems != null) GivePlayerItems(player, playerData._playerItems);
-            }
-        }
+        #region Hooks
 
         void OnPlayerRespawned(BasePlayer player)
         {
-            if (player.IsSleeping() && !permission.UserHasPermission(player.UserIDString, config.permExclude)) player.EndSleeping();
+            if (player.IsSleeping() && !permission.UserHasPermission(player.UserIDString, config.permExclude))
+            {
+                player.EndSleeping();
+                if (!allPlayerData.ContainsKey(player.UserIDString)) return;
+                var playerData = allPlayerData[player.UserIDString];
+                if (playerData._playerItems != null) GivePlayerItems(player, playerData._playerItems);
+                playerData._playerItems = null;
+            }
+        }
+
+        object OnPlayerRespawn(BasePlayer player)
+        {
+            if (!allPlayerData.ContainsKey(player.UserIDString)) return null;
+            var playerData = allPlayerData[player.UserIDString];
+            if (playerData._lastPosition == Vector3.zero) return null;
+            Vector3 latestPos = playerData._lastPosition;
+            playerData._lastPosition = Vector3.zero;
+
+            return new BasePlayer.SpawnPoint { pos = latestPos };
         }
 
         void OnPlayerDisconnected(BasePlayer player)
