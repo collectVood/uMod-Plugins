@@ -173,10 +173,12 @@ namespace Oxide.Plugins
             if (player.IsSleeping() && !permission.UserHasPermission(player.UserIDString, config.permExclude))
             {
                 player.EndSleeping();
+
                 if (!allPlayerData.ContainsKey(player.UserIDString)) return;
                 var playerData = allPlayerData[player.UserIDString];
                 if (playerData._playerItems != null) GivePlayerItems(player, playerData._playerItems);
                 playerData._playerItems = null;
+                if (playerData._lastPosition == Vector3.zero) allPlayerData.Remove(player.UserIDString);
             }
         }
 
