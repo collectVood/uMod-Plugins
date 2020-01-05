@@ -31,8 +31,8 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Exclude Permission")]
             public string permExclude = "nosleepers.exclude";
 
-            [JsonProperty(PropertyName = "Player Inactivity Data Removal (days)")]
-            public int inactivityRemovalTime = 7;
+            [JsonProperty(PropertyName = "Player Inactivity Data Removal (hours)")]
+            public int inactivityRemovalTime = 168;
         }
 
         protected override void LoadDefaultConfig()
@@ -130,7 +130,7 @@ namespace Oxide.Plugins
             foreach (var colData in copy)
             {
                 if (colData.Value._lastActive == 0) continue;
-                if (colData.Value._lastActive + (config.inactivityRemovalTime * 86400) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) allPlayerData.Remove(colData.Key);
+                if (colData.Value._lastActive + (config.inactivityRemovalTime * 3600) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) allPlayerData.Remove(colData.Key);
             }
         }
 
@@ -195,11 +195,14 @@ namespace Oxide.Plugins
         {
             if (!player.IsDestroyed && !permission.UserHasPermission(player.UserIDString, config.permExclude))
             {
-                var playerData = new PlayerData();
-                if (config.saveLastPosition) playerData._lastPosition = player.transform.position;
-                if (config.saveLastInventory) playerData._playerItems = GetAllItems(player.inventory);
-                if (allPlayerData.ContainsKey(player.UserIDString)) allPlayerData[player.UserIDString] = playerData;
-                else allPlayerData.Add(player.UserIDString, playerData);
+                if (config.saveLastPosition || config.saveLastInventory)
+                {
+                    var playerData = new PlayerData();
+                    if (config.saveLastPosition) playerData._lastPosition = player.transform.position;
+                    if (config.saveLastInventory) playerData._playerItems = GetAllItems(player.inventory);
+                    if (allPlayerData.ContainsKey(player.UserIDString)) allPlayerData[player.UserIDString] = playerData;
+                    else allPlayerData.Add(player.UserIDString, playerData);
+                }
 
                 player.Kill();
             }
