@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.1.3")]
+    [Info("Coloured Chat", "collect_vood", "2.1.4")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -293,6 +293,10 @@ namespace Oxide.Plugins
 
         void OnGroupDeleted(string name) => ClearCache();
 
+        void OnGroupPermissionGranted(string name, string perm) => ClearCache();
+
+        void OnGroupPermissionRevoked(string name, string perm) => ClearCache();
+
         object OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel)
         {
             if (BetterChatIns()) return null;
@@ -326,18 +330,20 @@ namespace Oxide.Plugins
                 if (hasData && playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) gradientName = ProcessGradient(player.displayName.EscapeRichText(), playerData.NameGradientArgs);
                 else if (HasNameRainbow(player.IPlayer) && (!hasData || (string.IsNullOrEmpty(playerData.NameColour) && playerData.NameGradientArgs == null))) gradientName = ProcessGradient(player.displayName.EscapeRichText(), config.rainbowColours);
                 cachedData.Add(player.UserIDString, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.UserIDString)));
-            }     
-            if (HasMessageRainbow(player.IPlayer) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) playerMessage = ProcessGradient(message, config.rainbowColours); 
+            }
+            if (HasMessageRainbow(player.IPlayer) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) playerMessage = ProcessGradient(message, config.rainbowColours, true);
 
             if (hasData && HasNameShowPerm(player.IPlayer))
             {              
                 //Gradient Handling
-                if (playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) playerUserName = cachedData[player.UserIDString].NameColourGradient;
+                if ((playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0)) playerUserName = cachedData[player.UserIDString].NameColourGradient;
                 else if (!string.IsNullOrEmpty(playerData.NameColour)) playerColour = playerData.NameColour;
 
-                if (playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs);
+                if (playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs, true);
                 else if (!string.IsNullOrEmpty(playerData.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
             }
+            else if (!hasData && HasNameShowPerm(player.IPlayer) && !string.IsNullOrEmpty(cachedData[player.UserIDString].NameColourGradient)) playerUserName = cachedData[player.UserIDString].NameColourGradient;
+
 
             //Group Handling
             string userPrimaryGroup = cachedData[player.UserIDString].PrimaryGroup;
@@ -353,7 +359,7 @@ namespace Oxide.Plugins
                 }
                 if (playerMessage == message)
                 {
-                    if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, groupData.MessageGradientArgs);
+                    if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, groupData.MessageGradientArgs, true);
                     else if (!string.IsNullOrEmpty(groupData.MessageColour)) playerMessage = ProcessColourMessage(message, groupData.MessageColour);
                 }
             }
@@ -439,7 +445,7 @@ namespace Oxide.Plugins
                     else if (HasNameRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.NameColour) && playerData.NameGradientArgs == null))) gradientName = ProcessGradient(player.Name, config.rainbowColours);
                     cachedData.Add(player.Id, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.Id)));
                 }
-                if (HasMessageRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) dict["Message"] = ProcessGradient(playerMessage, config.rainbowColours);
+                if (HasMessageRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) dict["Message"] = ProcessGradient(playerMessage, config.rainbowColours, true);
 
                 if (hasData && HasNameShowPerm(player))
                 {
@@ -447,7 +453,7 @@ namespace Oxide.Plugins
                     if (playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) dict["Username"] = cachedData[player.Id].NameColourGradient;
                     else if (!string.IsNullOrEmpty(playerData.NameColour)) ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = playerData.NameColour;
 
-                    if (playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) dict["Message"] = ProcessGradient(playerMessage, playerData.MessageGradientArgs);
+                    if (playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) dict["Message"] = ProcessGradient(playerMessage, playerData.MessageGradientArgs, true);
                     else if (!string.IsNullOrEmpty(playerData.MessageColour)) dict["Message"] = ProcessColourMessage(playerMessage, playerData.MessageColour);
                 }
 
@@ -465,7 +471,7 @@ namespace Oxide.Plugins
                     }
                     if (playerMessage == dict["Message"] as string)
                     {
-                        if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) dict["Message"] = ProcessGradient(playerMessage, groupData.MessageGradientArgs);
+                        if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) dict["Message"] = ProcessGradient(playerMessage, groupData.MessageGradientArgs, true);
                         else if (!string.IsNullOrEmpty(groupData.MessageColour)) dict["Message"] = ProcessColourMessage(playerMessage, groupData.MessageColour);
                     }
                 }
@@ -776,19 +782,18 @@ namespace Oxide.Plugins
             if (isGroup) ClearCache();
         }
 
-        string ProcessGradient(string name, string[] colourArgs)
+        string ProcessGradient(string name, string[] colourArgs, bool isMessage = false)
         {
-            colourArgs = colourArgs.Where(col => IsValidName(col) && IsValidMessage(col) && IsValidColour(col) && (IsInvalidCharacter(col) == null ? true : false)).ToArray();
+            colourArgs = colourArgs.Where(col => isMessage ? IsValidMessage(col) : IsValidName(col) && IsValidColour(col) && (IsInvalidCharacter(col) == null ? true : false)).ToArray();
+            if (colourArgs.Length < 2) return string.Empty;
 
             var chars = name.ToCharArray();
             string gradientName = string.Empty;
-
             var colours = new List<Color>();
             Color startColour;
             Color endColour;
-            int gradientsSteps = 0;
-            if (colourArgs.Length - 1 != 0) gradientsSteps = chars.Length / (colourArgs.Length - 1);
 
+            int gradientsSteps = chars.Length / (colourArgs.Length - 1);
             if (gradientsSteps <= 1)
             {
                 for (int i = 0; i < chars.Length; i++)
