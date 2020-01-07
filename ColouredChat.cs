@@ -813,34 +813,28 @@ namespace Oxide.Plugins
             string playerColourNonModified = playerColour = player.IsAdmin ? "#af5" : "#5af";
             string playerMessage = message;
 
-            bool hasData = false;
-
             var playerData = new PlayerData();
-            if (allColourData.ContainsKey(player.Id))
-            {
-                playerData = allColourData[player.Id];
-                hasData = true;
-            }
+            if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
 
             //Caching
             if (!cachedData.ContainsKey(player.Id))
             {
                 string gradientName = string.Empty;
-                if (hasData && playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) gradientName = ProcessGradient(player.Name, playerData.NameGradientArgs, false, player);
-                else if (HasNameRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.NameColour) && playerData.NameGradientArgs == null))) gradientName = ProcessGradient(player.Name, config.rainbowColours, false, player);
+                if (playerData?.NameGradientArgs != null) gradientName = ProcessGradient(player.Name, playerData.NameGradientArgs, false, player);
+                else if (HasNameRainbow(player) && string.IsNullOrEmpty(playerData?.NameColour)) gradientName = ProcessGradient(player.Name, config.rainbowColours, false, player);
                 cachedData.Add(player.Id, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.Id)));
             }
-            if (HasMessageRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) playerMessage = ProcessGradient(message, config.rainbowColours, true, player);
+            if (HasMessageRainbow(player) && string.IsNullOrEmpty(playerData?.MessageColour)) playerMessage = ProcessGradient(message, config.rainbowColours, true, player);
 
             if (HasNameShowPerm(player))
             {
                 //Gradient Handling
-                if (hasData && (playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0)) playerUserName = cachedData[player.Id].NameColourGradient;
-                else if (hasData && !string.IsNullOrEmpty(playerData.NameColour)) playerColour = playerData.NameColour;
+                if (playerData?.NameGradientArgs != null) playerUserName = cachedData[player.Id].NameColourGradient;
+                else if (!string.IsNullOrEmpty(playerData?.NameColour)) playerColour = playerData.NameColour;
                 else if (playerUserName == player.Name && !string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient)) playerUserName = cachedData[player.Id].NameColourGradient;
 
-                if (hasData && playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs, true, player);
-                else if (hasData && !string.IsNullOrEmpty(playerData.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
+                if (playerData?.MessageGradientArgs != null) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs, true, player);
+                else if (!string.IsNullOrEmpty(playerData?.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
             }
 
             //Group Handling
@@ -850,15 +844,15 @@ namespace Oxide.Plugins
                 var groupData = allColourData[userPrimaryGroup];
                 if (playerUserName == player.Name)
                 {
-                    if (groupData.NameGradientArgs != null && groupData.NameGradientArgs.Length != 0) playerUserName = string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient) ?
+                    if (groupData?.NameGradientArgs != null) playerUserName = string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient) ?
                             cachedData[player.Id].NameColourGradient = ProcessGradient(player.Name, groupData.NameGradientArgs, false, player) :
                             cachedData[player.Id].NameColourGradient;
-                    else if (!string.IsNullOrEmpty(groupData.NameColour)) playerColour = groupData.NameColour;
+                    else if (!string.IsNullOrEmpty(groupData?.NameColour)) playerColour = groupData.NameColour;
                 }
                 if (playerMessage == message)
                 {
-                    if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, groupData.MessageGradientArgs, true, player);
-                    else if (!string.IsNullOrEmpty(groupData.MessageColour)) playerMessage = ProcessColourMessage(message, groupData.MessageColour);
+                    if (groupData?.MessageGradientArgs != null) playerMessage = ProcessGradient(message, groupData.MessageGradientArgs, true, player);
+                    else if (!string.IsNullOrEmpty(groupData?.MessageColour)) playerMessage = ProcessColourMessage(message, groupData.MessageColour);
                 }
             }
 
