@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.1.4")]
+    [Info("Coloured Chat", "collect_vood", "2.1.5")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -304,8 +304,6 @@ namespace Oxide.Plugins
             if (player == null) return null;
             if (ZoneManagerIns() && ZoneManager.Call<bool>("PlayerHasFlag", player, "nochat")) return false;
 
-            bool hasData = allColourData.ContainsKey(player.UserIDString);
-
             if (Chat.serverlog)
             {
                 object[] objArray = new object[] { ConsoleColor.DarkYellow, null, null, null };
@@ -316,54 +314,10 @@ namespace Oxide.Plugins
             }
             string formattedMsg = string.Format("{0}[{1}]", new string[] { player.displayName.EscapeRichText(), player.UserIDString });
 
-            string playerUserName = player.displayName;
-            string playerColour = player.IsAdmin ? "#af5" : "#5af";
-            string playerMessage = message;
-
-            var playerData = new PlayerData();
-            if (allColourData.ContainsKey(player.UserIDString)) playerData = allColourData[player.UserIDString];
-
-            //Caching
-            if (!cachedData.ContainsKey(player.UserIDString))
-            {
-                string gradientName = string.Empty;
-                if (hasData && playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) gradientName = ProcessGradient(player.displayName.EscapeRichText(), playerData.NameGradientArgs, false, player.IPlayer);
-                else if (HasNameRainbow(player.IPlayer) && (!hasData || (string.IsNullOrEmpty(playerData.NameColour) && playerData.NameGradientArgs == null))) gradientName = ProcessGradient(player.displayName.EscapeRichText(), config.rainbowColours, false, player.IPlayer);
-                cachedData.Add(player.UserIDString, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.UserIDString)));
-            }
-            if (HasMessageRainbow(player.IPlayer) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) playerMessage = ProcessGradient(message, config.rainbowColours, true, player.IPlayer);
-
-            if (HasNameShowPerm(player.IPlayer))
-            {              
-                //Gradient Handling
-                if (hasData && (playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0)) playerUserName = cachedData[player.UserIDString].NameColourGradient;
-                else if (hasData && !string.IsNullOrEmpty(playerData.NameColour)) playerColour = playerData.NameColour;
-                else if (playerUserName == player.displayName && !string.IsNullOrEmpty(cachedData[player.UserIDString].NameColourGradient)) playerUserName = cachedData[player.UserIDString].NameColourGradient;
-
-                if (hasData && playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs, true, player.IPlayer);
-                else if (hasData && !string.IsNullOrEmpty(playerData.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
-            }
-
-            //Group Handling
-            string userPrimaryGroup = cachedData[player.UserIDString].PrimaryGroup;
-            if (allColourData.ContainsKey(userPrimaryGroup))
-            {
-                var groupData = allColourData[userPrimaryGroup];
-                if (playerUserName == player.displayName && (playerColour == "#af5" || playerColour == "#5af"))
-                {
-                    if (groupData.NameGradientArgs != null && groupData.NameGradientArgs.Length != 0) playerUserName = string.IsNullOrEmpty(cachedData[player.UserIDString].NameColourGradient) ? 
-                            cachedData[player.UserIDString].NameColourGradient = ProcessGradient(player.displayName.EscapeRichText(), groupData.NameGradientArgs, false, player.IPlayer) : 
-                            cachedData[player.UserIDString].NameColourGradient;
-                    else if (!string.IsNullOrEmpty(groupData.NameColour)) playerColour = groupData.NameColour;
-                }
-                if (playerMessage == message)
-                {
-                    if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, groupData.MessageGradientArgs, true, player.IPlayer);
-                    else if (!string.IsNullOrEmpty(groupData.MessageColour)) playerMessage = ProcessColourMessage(message, groupData.MessageColour);
-                }
-            }
-            var colouredChatMessage = new ColouredChatMessage(player.IPlayer, playerUserName, playerColour, playerMessage);
+            var colouredChatMessage = FromMessage(player.IPlayer, message);
             var colouredChatMessageDict = colouredChatMessage.ToDictionary();
+
+            #region API
 
             foreach (Plugin plugin in plugins.GetAll())
             {
@@ -385,6 +339,8 @@ namespace Oxide.Plugins
             }
 
             colouredChatMessage = ColouredChatMessage.FromDictionary(colouredChatMessageDict);
+
+            #endregion
 
             if (channel == Chat.ChatChannel.Global)
             {
@@ -414,7 +370,7 @@ namespace Oxide.Plugins
                 Message = message,
                 UserId = player.UserIDString,
                 Username = player.displayName,
-                Color = playerColour,
+                Color = colouredChatMessage.Colour,
                 Time = Facepunch.Math.Epoch.Current
             };
             Facepunch.RCon.Broadcast(Facepunch.RCon.LogType.Chat, chatentry);          
@@ -427,54 +383,11 @@ namespace Oxide.Plugins
             {
                 IPlayer player = dict["Player"] as IPlayer;
 
-                bool hasData = allColourData.ContainsKey(player.Id);
+                var colouredChatMessage = FromMessage(player, dict["Message"].ToString());
 
-                string playerUserName = dict["Username"] as string;
-                string playerColour = ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] as string;
-                string playerMessage = dict["Message"] as string;
-
-                var playerData = new PlayerData();
-                if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
-
-                //Caching
-                if (!cachedData.ContainsKey(player.Id))
-                {
-                    string gradientName = string.Empty;
-                    if (hasData && playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) gradientName = ProcessGradient(player.Name, playerData.NameGradientArgs, false, player);
-                    else if (HasNameRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.NameColour) && playerData.NameGradientArgs == null))) gradientName = ProcessGradient(player.Name, config.rainbowColours, false, player);
-                    cachedData.Add(player.Id, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.Id)));
-                }
-                if (HasMessageRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) dict["Message"] = ProcessGradient(playerMessage, config.rainbowColours, true, player);
-
-                if (HasNameShowPerm(player))
-                {
-                    //Gradient Handling
-                    if (hasData && playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) dict["Username"] = cachedData[player.Id].NameColourGradient;
-                    else if (hasData && !string.IsNullOrEmpty(playerData.NameColour)) ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = playerData.NameColour;
-                    else if (playerUserName == dict["Username"].ToString() && !string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient)) playerUserName = cachedData[player.Id].NameColourGradient;
-
-                    if (hasData && playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) dict["Message"] = ProcessGradient(playerMessage, playerData.MessageGradientArgs, true, player);
-                    else if (hasData && !string.IsNullOrEmpty(playerData.MessageColour)) dict["Message"] = ProcessColourMessage(playerMessage, playerData.MessageColour);
-                }
-
-                //Group Handling
-                string userPrimaryGroup = cachedData[player.Id].PrimaryGroup;
-                if (allColourData.ContainsKey(userPrimaryGroup))
-                {
-                    var groupData = allColourData[userPrimaryGroup];
-                    if (playerUserName == dict["Username"] as string)
-                    {
-                        if (groupData.NameGradientArgs != null && groupData.NameGradientArgs.Length != 0) dict["Username"] = string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient) ?
-                                cachedData[player.Id].NameColourGradient = ProcessGradient(player.Name, groupData.NameGradientArgs, false, player) :
-                                cachedData[player.Id].NameColourGradient;
-                        else if (!string.IsNullOrEmpty(groupData.NameColour)) ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = groupData.NameColour;
-                    }
-                    if (playerMessage == dict["Message"] as string)
-                    {
-                        if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) dict["Message"] = ProcessGradient(playerMessage, groupData.MessageGradientArgs, true, player);
-                        else if (!string.IsNullOrEmpty(groupData.MessageColour)) dict["Message"] = ProcessColourMessage(playerMessage, groupData.MessageColour);
-                    }
-                }
+                dict["Username"] = colouredChatMessage.Name;
+                ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = colouredChatMessage.Colour;
+                dict["Message"] = colouredChatMessage.Message;
             }
             return dict;
         }
@@ -893,6 +806,65 @@ namespace Oxide.Plugins
             return primaryGroup;
         }
 
+        public ColouredChatMessage FromMessage(IPlayer player, string message)
+        {
+            string playerUserName = player.Name;
+            string playerColour = string.Empty;
+            string playerColourNonModified = playerColour = player.IsAdmin ? "#af5" : "#5af";
+            string playerMessage = message;
+
+            bool hasData = false;
+
+            var playerData = new PlayerData();
+            if (allColourData.ContainsKey(player.Id))
+            {
+                playerData = allColourData[player.Id];
+                hasData = true;
+            }
+
+            //Caching
+            if (!cachedData.ContainsKey(player.Id))
+            {
+                string gradientName = string.Empty;
+                if (hasData && playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0) gradientName = ProcessGradient(player.Name, playerData.NameGradientArgs, false, player);
+                else if (HasNameRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.NameColour) && playerData.NameGradientArgs == null))) gradientName = ProcessGradient(player.Name, config.rainbowColours, false, player);
+                cachedData.Add(player.Id, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.Id)));
+            }
+            if (HasMessageRainbow(player) && (!hasData || (string.IsNullOrEmpty(playerData.MessageColour) && playerData.MessageGradientArgs == null))) playerMessage = ProcessGradient(message, config.rainbowColours, true, player);
+
+            if (HasNameShowPerm(player))
+            {
+                //Gradient Handling
+                if (hasData && (playerData.NameGradientArgs != null && playerData.NameGradientArgs.Length != 0)) playerUserName = cachedData[player.Id].NameColourGradient;
+                else if (hasData && !string.IsNullOrEmpty(playerData.NameColour)) playerColour = playerData.NameColour;
+                else if (playerUserName == player.Name && !string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient)) playerUserName = cachedData[player.Id].NameColourGradient;
+
+                if (hasData && playerData.MessageGradientArgs != null && playerData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs, true, player);
+                else if (hasData && !string.IsNullOrEmpty(playerData.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
+            }
+
+            //Group Handling
+            string userPrimaryGroup = cachedData[player.Id].PrimaryGroup;
+            if (allColourData.ContainsKey(userPrimaryGroup))
+            {
+                var groupData = allColourData[userPrimaryGroup];
+                if (playerUserName == player.Name)
+                {
+                    if (groupData.NameGradientArgs != null && groupData.NameGradientArgs.Length != 0) playerUserName = string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient) ?
+                            cachedData[player.Id].NameColourGradient = ProcessGradient(player.Name, groupData.NameGradientArgs, false, player) :
+                            cachedData[player.Id].NameColourGradient;
+                    else if (!string.IsNullOrEmpty(groupData.NameColour)) playerColour = groupData.NameColour;
+                }
+                if (playerMessage == message)
+                {
+                    if (groupData.MessageGradientArgs != null && groupData.MessageGradientArgs.Length != 0) playerMessage = ProcessGradient(message, groupData.MessageGradientArgs, true, player);
+                    else if (!string.IsNullOrEmpty(groupData.MessageColour)) playerMessage = ProcessColourMessage(message, groupData.MessageColour);
+                }
+            }
+
+            return new ColouredChatMessage(player, playerUserName, (playerColour == playerColourNonModified && BetterChatIns()) ? "#55aaff" : playerColour, playerMessage);
+        }
+
         #endregion
 
         #region API
@@ -934,7 +906,7 @@ namespace Oxide.Plugins
                     Colour = dict[nameof(Colour)] as string,
                     Message = dict[nameof(Message)] as string,
                 };
-            }
+            }           
         }
         
         #endregion
