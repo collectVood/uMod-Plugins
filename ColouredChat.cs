@@ -92,7 +92,7 @@ namespace Oxide.Plugins
             public string namePermRandomColour = "colouredchat.name.random";
             [JsonProperty(PropertyName = "Name use blacklist")]
             public bool nameUseBlacklist = true;
-            [JsonProperty(PropertyName = "Name blocked colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Name blocked colour hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> nameBlockColoursHex = new List<string>
             {
                 { "#000000" }
@@ -109,7 +109,7 @@ namespace Oxide.Plugins
             {
                 { "#000000" }
             };
-            [JsonProperty(PropertyName = "Name whitelisted colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Name whitelisted colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public Dictionary<string, string> nameWhitelistedRangeColoursHex = new Dictionary<string, string>
             {
                 { "#000000", "#FFFFFF" }
@@ -141,7 +141,7 @@ namespace Oxide.Plugins
             {
                 { "#000000" }
             };
-            [JsonProperty(PropertyName = "Message blocked colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Message blocked colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public Dictionary<string, string> messageBlacklistedRangeColoursHex = new Dictionary<string, string>
             {
                 { "#000000", "#000000" }
@@ -153,7 +153,7 @@ namespace Oxide.Plugins
             {
                 { "#000000" }
             };
-            [JsonProperty(PropertyName = "Message whitelisted colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            [JsonProperty(PropertyName = "Message whitelisted colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public Dictionary<string, string> messageWhitelistedRangeColoursHex = new Dictionary<string, string>
             {
                 { "#000000", "#FFFFFF" }
