@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.1.5")]
+    [Info("Coloured Chat", "collect_vood", "2.2.0")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -35,7 +35,7 @@ namespace Oxide.Plugins
                 { "NoPermissionGradient", "You don't have permission to use {0} gradients." },
                 { "NoPermissionRandom", "You don't have permission to use random {0} colours." },
                 { "IncorrectGradientUsage", "Incorrect usage! To use gradients please use /{0} gradient hexCode1 hexCode2 ...</color>" },
-                { "IncorrectGradientUsageArgs", "Incorrect usage! A gradient requires at least two different colours!"},
+                { "IncorrectGradientUsageArgs", "Incorrect usage! A gradient requires at least two different valid colours!"},
                 { "GradientChanged", "{0} gradient changed to {1}!"},
                 { "GradientChangedFor", "{0}'s gradient {1} colour changed to {2}!"},
                 { "IncorrectUsage", "Incorrect usage! /{0} <colour>\nFor detailed help do /{1}" },
@@ -46,7 +46,7 @@ namespace Oxide.Plugins
                 { "ColourRemovedFor", "{0}'s {1} colour was removed!" },
                 { "ColourChanged", "{0} colour changed to <color={1}>{1}</color>!" },
                 { "ColourChangedFor", "{0}'s {1} colour changed to <color={2}>{2}</color>!" },
-                { "ColoursInfo", "You can only use hexcodes, eg '<color=#FFFF00>#FFFF00</color>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\n\nAvailable Commands: {0}\n\n{1}"},
+                { "ColoursInfo", "You can only use hexcodes, eg '<color=#ffff94>#ffff94</color>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\n\nAvailable Commands: {0}\n\n{1}"},
                 { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." },
                 { "RndColour", "{0} colour was randomized to <color={1}>{1}</color>" },
                 { "RndColourFor", "{0} colour of {1} randomized to {2}."},
@@ -67,7 +67,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Block messages of muted players (requires BetterChatMute)")]
             public bool blockChatMute = true;
             [JsonProperty(PropertyName = "Rainbow Colours")]
-            public string[] rainbowColours = { "#ff0000", "#ffa500", "#ffff00", "#008000", "#0000ff", "#4b0082", "#ee82ee" };
+            public string[] rainbowColours = { "#ff0000", "#ffa500", "#ffff94", "#008000", "#0000ff", "#4b0082", "#ee82ee" };
             [JsonProperty(PropertyName = "Blocked Characters")]
             public string[] blockedValues = { "{", "}", "size" };
 
@@ -97,12 +97,22 @@ namespace Oxide.Plugins
             {
                 { "#000000" }
             };
+            [JsonProperty(PropertyName = "Name blocked colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public Dictionary<string, string> nameBlacklistedRangeColoursHex = new Dictionary<string, string>
+            {
+                { "#000000", "#000000" }
+            };
             [JsonProperty(PropertyName = "Name use whitelist")]
             public bool nameUseWhitelist = false;
             [JsonProperty(PropertyName = "Name whitelisted colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> nameWhitelistedColoursHex = new List<string>
             {
                 { "#000000" }
+            };
+            [JsonProperty(PropertyName = "Name whitelisted colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public Dictionary<string, string> nameWhitelistedRangeColoursHex = new Dictionary<string, string>
+            {
+                { "#000000", "#FFFFFF" }
             };
 
             //Message
@@ -131,12 +141,22 @@ namespace Oxide.Plugins
             {
                 { "#000000" }
             };
+            [JsonProperty(PropertyName = "Message blocked colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public Dictionary<string, string> messageBlacklistedRangeColoursHex = new Dictionary<string, string>
+            {
+                { "#000000", "#000000" }
+            };
             [JsonProperty(PropertyName = "Message use whitelist")]
             public bool messageUseWhitelist = false;
             [JsonProperty(PropertyName = "Message whitelisted colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<string> messageWhitelistedColoursHex = new List<string>
             {
                 { "#000000" }
+            };
+            [JsonProperty(PropertyName = "Message whitelisted colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public Dictionary<string, string> messageWhitelistedRangeColoursHex = new Dictionary<string, string>
+            {
+                { "#000000", "#FFFFFF" }
             };
         }
 
@@ -248,6 +268,8 @@ namespace Oxide.Plugins
 
         private void Init()
         {
+            if (config.messageUseBlacklist && config.messageUseWhitelist || config.nameUseBlacklist && config.nameUseWhitelist) PrintWarning("You are using both black/- and whitelist! This might cause issues.");
+
             permission.RegisterPermission(config.namePermShow, this);
             permission.RegisterPermission(config.messagePermShow, this);
             permission.RegisterPermission(config.namePermRainbow, this);
@@ -435,16 +457,52 @@ namespace Oxide.Plugins
         bool IsValidName(string input, IPlayer iPlayer = null)
         {
             if (iPlayer != null && CanNameBypass(iPlayer)) return true;
-            if (config.nameUseBlacklist) return !config.nameBlockColoursHex.Any(x => (input == x));
-            else if (config.nameUseBlacklist) return config.nameWhitelistedColoursHex.Any(x => (input == x));
+            if (config.nameUseBlacklist)
+            {
+                bool inRange = false;
+                foreach (var rangeHex in config.nameBlacklistedRangeColoursHex)
+                {
+                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    if (inRange) break;
+                }
+                return !config.nameBlockColoursHex.Any(x => (input == x)) && !inRange;
+            }
+            else if (config.nameUseWhitelist)
+            {
+                bool inRange = false;
+                foreach (var rangeHex in config.nameWhitelistedRangeColoursHex)
+                {
+                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    if (!inRange) break;
+                }
+                return config.nameWhitelistedColoursHex.Any(x => (input == x)) || inRange;
+            }
             return true;
         }
 
         bool IsValidMessage(string input, IPlayer iPlayer = null)
         {
             if (iPlayer != null && CanMessageBypass(iPlayer)) return true;
-            if (config.messageUseBlacklist) return !config.messageBlockColoursHex.Any(x => (input == x));
-            else if (config.messageUseWhitelist) return config.messageWhitelistedColoursHex.Any(x => (input == x));
+            if (config.messageUseBlacklist)
+            {
+                bool inRange = false;
+                foreach (var rangeHex in config.messageBlacklistedRangeColoursHex)
+                {
+                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    if (inRange) break;
+                }
+                return !config.messageBlockColoursHex.Any(x => (input == x)) && !inRange;
+            }
+            else if (config.messageUseWhitelist)
+            {
+                bool inRange = false;
+                foreach (var rangeHex in config.messageWhitelistedRangeColoursHex)
+                {
+                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    if (!inRange) break;
+                }
+                return config.messageWhitelistedColoursHex.Any(x => (input == x)) || inRange;
+            }
             return true;
         }
 
@@ -521,26 +579,26 @@ namespace Oxide.Plugins
 
             if (isMessage)
             {
-                availableCommands += $"\n/{config.messageColourCommand} <color=#ff0000>#ff0000</color>";
+                availableCommands += $"\n/{config.messageColourCommand} <color=#ff6666>#ff6666</color>";
                 if (CanMessageRandomColour(player)) availableCommands += $"\n/{config.messageColourCommand} random";
-                if (CanMessageGradient(player)) availableCommands += $"\n/{config.messageColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>" +
-                                                                     $"\n/{config.messageColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color> <color=#aaff55>#aaff55</color>";
-                if (CanMessageSetOthers(player)) availableCommands += $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff0000>#ff0000</color>" +
-                                                                      $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
-                if (player.IsAdmin) availableCommands += $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff0000>#ff0000</color>" +
-                                                         $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
+                if (CanMessageGradient(player)) availableCommands += $"\n/{config.messageColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ff6666>#ff6666</color>" +
+                                                                     $"\n/{config.messageColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color> <color=#90ee90>#90ee90</color>";
+                if (CanMessageSetOthers(player)) availableCommands += $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff6666>#ff6666</color>" +
+                                                                      $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
+                if (player.IsAdmin) availableCommands += $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>" +
+                                                         $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
                 if (HasMessageRainbow(player)) availableCommands += $"\n\nBy default rainbow message colour: {ProcessGradient("Rainbow", config.rainbowColours)}";
             }
             else
             {
-                availableCommands += $"\n/{config.nameColourCommand} <color=#ff0000>#ff0000</color>";
+                availableCommands += $"\n/{config.nameColourCommand} <color=#ff6666>#ff6666</color>";
                 if (CanNameRandomColour(player)) availableCommands += $"\n/{config.nameColourCommand} random";
-                if (CanNameGradient(player)) availableCommands += $"\n/{config.nameColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>" +
-                                                                     $"\n/{config.nameColourCommand} gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color> <color=#aaff55>#aaff55</color>";
-                if (CanNameSetOthers(player)) availableCommands += $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff0000>#ff0000</color>" +
-                                                                      $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
-                if (player.IsAdmin) availableCommands += $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff0000>#ff0000</color>" +
-                                                         $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff0000>#ff0000</color> <color=#ffff00>#ffff00</color>";
+                if (CanNameGradient(player)) availableCommands += $"\n/{config.nameColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>" +
+                                                                     $"\n/{config.nameColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color> <color=#90ee90>#90ee90</color>";
+                if (CanNameSetOthers(player)) availableCommands += $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff6666>#ff6666</color>" +
+                                                                      $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
+                if (player.IsAdmin) availableCommands += $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>" +
+                                                         $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
                 if (HasNameRainbow(player)) availableCommands += $"\n\nBy default rainbow name colour: {ProcessGradient(player.Name, config.rainbowColours)}";
             }
 
@@ -553,6 +611,10 @@ namespace Oxide.Plugins
                 {
                     additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
                 }
+                foreach (var colourRange in config.messageWhitelistedRangeColoursHex)
+                {
+                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
+                }
             }
             else if (isMessage && config.messageUseBlacklist)
             {
@@ -560,6 +622,10 @@ namespace Oxide.Plugins
                 foreach (string colour in config.messageBlockColoursHex)
                 {
                     additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
+                }
+                foreach (var colourRange in config.messageBlacklistedRangeColoursHex)
+                {
+                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
                 }
             }
             else if (!isMessage && config.nameUseWhitelist)
@@ -569,6 +635,10 @@ namespace Oxide.Plugins
                 {
                     additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
                 }
+                foreach (var colourRange in config.nameWhitelistedRangeColoursHex)
+                {
+                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
+                }
             }
             else if (!isMessage && config.nameUseBlacklist)
             {
@@ -576,6 +646,10 @@ namespace Oxide.Plugins
                 foreach (string colour in config.nameBlockColoursHex)
                 {
                     additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
+                }
+                foreach (var colourRange in config.nameBlacklistedRangeColoursHex)
+                {
+                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
                 }
             }
 
@@ -603,9 +677,10 @@ namespace Oxide.Plugins
                     player.Reply(GetMessage("NoPermissionGradient", player, isMessage ? "message" : "name"));
                     return;
                 }
+                colours = colours.Where(col => isMessage ? IsValidMessage(col, player) : IsValidName(col, player) && IsValidColour(col) && (IsInvalidCharacter(col) == null ? true : false)).ToArray();
                 if (colours.Length < 2)
                 {
-                    player.Reply(GetMessage("IncorrectGradientUsageArgs", player));
+                    player.Reply(GetMessage("IncorrectGradientUsageArgs", player, isMessage ? config.messageColourCommand : config.nameColourCommand));
                     return;
                 }
                 string gradientName = ProcessGradient(isMessage ? "Example Message" : target.Name, colours, isMessage, player);
@@ -699,9 +774,6 @@ namespace Oxide.Plugins
 
         string ProcessGradient(string name, string[] colourArgs, bool isMessage = false, IPlayer iPlayer = null)
         {           
-            colourArgs = colourArgs.Where(col => isMessage ? IsValidMessage(col, iPlayer) : IsValidName(col, iPlayer) && IsValidColour(col) && (IsInvalidCharacter(col) == null ? true : false)).ToArray();
-            if (colourArgs.Length < 2) return string.Empty;
-
             var chars = name.ToCharArray();
             string gradientName = string.Empty;
             var colours = new List<Color>();
@@ -806,7 +878,7 @@ namespace Oxide.Plugins
             return primaryGroup;
         }
 
-        public ColouredChatMessage FromMessage(IPlayer player, string message)
+        ColouredChatMessage FromMessage(IPlayer player, string message)
         {
             string playerUserName = player.Name;
             string playerColour = string.Empty;
@@ -842,7 +914,7 @@ namespace Oxide.Plugins
             if (allColourData.ContainsKey(userPrimaryGroup))
             {
                 var groupData = allColourData[userPrimaryGroup];
-                if (playerUserName == player.Name)
+                if (playerUserName == player.Name && playerColour == playerColourNonModified)
                 {
                     if (groupData?.NameGradientArgs != null) playerUserName = string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient) ?
                             cachedData[player.Id].NameColourGradient = ProcessGradient(player.Name, groupData.NameGradientArgs, false, player) :
@@ -857,6 +929,22 @@ namespace Oxide.Plugins
             }
 
             return new ColouredChatMessage(player, playerUserName, (playerColour == playerColourNonModified && BetterChatIns()) ? "#55aaff" : playerColour, playerMessage);
+        }
+
+        bool IsInHexRange(string hexCode,string rangeHexCode1, string rangeHexCode2)
+        {
+            Color mainColour;
+            ColorUtility.TryParseHtmlString(hexCode, out mainColour);
+            Color start;
+            ColorUtility.TryParseHtmlString(rangeHexCode1, out start);
+            Color end;
+            ColorUtility.TryParseHtmlString(rangeHexCode2, out end);
+
+            if ((mainColour.r > start.r && mainColour.r < end.r) &&
+                (mainColour.g > start.g && mainColour.g < end.g) &&
+                (mainColour.b > start.b && mainColour.b < end.b)) return true;
+
+            return false;
         }
 
         #endregion
