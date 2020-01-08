@@ -98,9 +98,9 @@ namespace Oxide.Plugins
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Name blocked colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public Dictionary<string, string> nameBlacklistedRangeColoursHex = new Dictionary<string, string>
+            public List<ColourRange> nameBlacklistedRangeColoursHex = new List<ColourRange>
             {
-                { "#000000", "#000000" }
+                { new ColourRange("#000000", "#000000") }
             };
             [JsonProperty(PropertyName = "Name use whitelist")]
             public bool nameUseWhitelist = false;
@@ -110,9 +110,9 @@ namespace Oxide.Plugins
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Name whitelisted colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public Dictionary<string, string> nameWhitelistedRangeColoursHex = new Dictionary<string, string>
+            public List<ColourRange> nameWhitelistedRangeColoursHex = new List<ColourRange>
             {
-                { "#000000", "#FFFFFF" }
+                { new ColourRange("#000000", "#FFFFFF") }
             };
 
             //Message
@@ -142,9 +142,9 @@ namespace Oxide.Plugins
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Message blocked colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public Dictionary<string, string> messageBlacklistedRangeColoursHex = new Dictionary<string, string>
+            public List<ColourRange> messageBlacklistedRangeColoursHex = new List<ColourRange>
             {
-                { "#000000", "#000000" }
+                { new ColourRange("#000000", "#000000") }
             };
             [JsonProperty(PropertyName = "Message use whitelist")]
             public bool messageUseWhitelist = false;
@@ -154,9 +154,9 @@ namespace Oxide.Plugins
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Message whitelisted colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public Dictionary<string, string> messageWhitelistedRangeColoursHex = new Dictionary<string, string>
+            public List<ColourRange> messageWhitelistedRangeColoursHex = new List<ColourRange>
             {
-                { "#000000", "#FFFFFF" }
+                { new ColourRange("#000000", "#FFFFFF") }
             };
         }
 
@@ -174,6 +174,24 @@ namespace Oxide.Plugins
         }
 
         protected override void SaveConfig() => Config.WriteObject(config);
+
+        #region Colour Range Class
+
+        public class ColourRange
+        {
+            [JsonProperty(PropertyName = "From")]
+            public string _from;
+            [JsonProperty(PropertyName = "To")]
+            public string _to;
+
+            public ColourRange(string from, string to)
+            {
+                _from = from;
+                _to = to;
+            }
+        }
+
+        #endregion
 
         #endregion
 
@@ -441,7 +459,7 @@ namespace Oxide.Plugins
         bool HasNamePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermUse));
         bool HasNameRainbow(IPlayer player) => (permission.UserHasPermission(player.Id, config.namePermRainbow));
         bool CanNameGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermGradient));
-        bool CanNameBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermBypass));
+        bool CanNameBypass(IPlayer player) => (permission.UserHasPermission(player.Id, config.namePermBypass)); //player.IsAdmin || 
         bool CanNameSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermSetOthers));
         bool CanNameRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermRandomColour));
 
@@ -460,9 +478,9 @@ namespace Oxide.Plugins
             if (config.nameUseBlacklist)
             {
                 bool inRange = false;
-                foreach (var rangeHex in config.nameBlacklistedRangeColoursHex)
+                foreach (var colourRange in config.nameBlacklistedRangeColoursHex)
                 {
-                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    inRange = IsInHexRange(input, colourRange._from, colourRange._to);
                     if (inRange) break;
                 }
                 return !config.nameBlockColoursHex.Any(x => (input == x)) && !inRange;
@@ -470,9 +488,9 @@ namespace Oxide.Plugins
             else if (config.nameUseWhitelist)
             {
                 bool inRange = false;
-                foreach (var rangeHex in config.nameWhitelistedRangeColoursHex)
+                foreach (var colourRange in config.nameWhitelistedRangeColoursHex)
                 {
-                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    inRange = IsInHexRange(input, colourRange._from, colourRange._to);
                     if (!inRange) break;
                 }
                 return config.nameWhitelistedColoursHex.Any(x => (input == x)) || inRange;
@@ -486,9 +504,9 @@ namespace Oxide.Plugins
             if (config.messageUseBlacklist)
             {
                 bool inRange = false;
-                foreach (var rangeHex in config.messageBlacklistedRangeColoursHex)
+                foreach (var colourRange in config.messageBlacklistedRangeColoursHex)
                 {
-                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    inRange = IsInHexRange(input, colourRange._from, colourRange._to);
                     if (inRange) break;
                 }
                 return !config.messageBlockColoursHex.Any(x => (input == x)) && !inRange;
@@ -496,9 +514,9 @@ namespace Oxide.Plugins
             else if (config.messageUseWhitelist)
             {
                 bool inRange = false;
-                foreach (var rangeHex in config.messageWhitelistedRangeColoursHex)
+                foreach (var colourRange in config.messageWhitelistedRangeColoursHex)
                 {
-                    inRange = IsInHexRange(input, rangeHex.Key, rangeHex.Value);
+                    inRange = IsInHexRange(input, colourRange._from, colourRange._to);
                     if (!inRange) break;
                 }
                 return config.messageWhitelistedColoursHex.Any(x => (input == x)) || inRange;
@@ -613,7 +631,7 @@ namespace Oxide.Plugins
                 }
                 foreach (var colourRange in config.messageWhitelistedRangeColoursHex)
                 {
-                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
+                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
                 }
             }
             else if (isMessage && config.messageUseBlacklist)
@@ -625,7 +643,7 @@ namespace Oxide.Plugins
                 }
                 foreach (var colourRange in config.messageBlacklistedRangeColoursHex)
                 {
-                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
+                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
                 }
             }
             else if (!isMessage && config.nameUseWhitelist)
@@ -637,7 +655,7 @@ namespace Oxide.Plugins
                 }
                 foreach (var colourRange in config.nameWhitelistedRangeColoursHex)
                 {
-                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
+                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
                 }
             }
             else if (!isMessage && config.nameUseBlacklist)
@@ -649,7 +667,7 @@ namespace Oxide.Plugins
                 }
                 foreach (var colourRange in config.nameBlacklistedRangeColoursHex)
                 {
-                    additionalInfo += "- From <color=" + colourRange.Key + ">" + colourRange.Key + "</color> to <color=" + colourRange.Value + ">" + colourRange.Value + "</color>\n";
+                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
                 }
             }
 
