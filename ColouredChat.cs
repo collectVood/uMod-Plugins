@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.0")]
+    [Info("Coloured Chat", "collect_vood", "2.2.1")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -425,8 +425,8 @@ namespace Oxide.Plugins
 
                 var colouredChatMessage = FromMessage(player, dict["Message"].ToString());
 
-                dict["Username"] = colouredChatMessage.Name;
-                ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = colouredChatMessage.Colour;
+                if (!string.IsNullOrEmpty(colouredChatMessage.Name)) dict["Username"] = colouredChatMessage.Name;
+                if (!string.IsNullOrEmpty(colouredChatMessage.Colour)) { ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = colouredChatMessage.Colour; }
                 dict["Message"] = colouredChatMessage.Message;
             }
             return dict;
@@ -899,8 +899,8 @@ namespace Oxide.Plugins
         ColouredChatMessage FromMessage(IPlayer player, string message)
         {
             string playerUserName = player.Name;
-            string playerColour = string.Empty;
-            string playerColourNonModified = playerColour = player.IsAdmin ? "#af5" : "#5af";
+            string playerColour = player.IsAdmin ? "#af5" : "#5af";
+            string playerColourNonModified = playerColour;
             string playerMessage = message;
 
             var playerData = new PlayerData();
@@ -946,7 +946,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            return new ColouredChatMessage(player, playerUserName, (playerColour == playerColourNonModified && BetterChatIns()) ? "#55aaff" : playerColour, playerMessage);
+            return new ColouredChatMessage(player, (playerUserName == player.Name && BetterChatIns()) ? string.Empty : playerUserName, (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour, playerMessage);
         }
 
         bool IsInHexRange(string hexCode,string rangeHexCode1, string rangeHexCode2)
@@ -958,9 +958,9 @@ namespace Oxide.Plugins
             Color end;
             ColorUtility.TryParseHtmlString(rangeHexCode2, out end);
 
-            if ((mainColour.r > start.r && mainColour.r < end.r) &&
-                (mainColour.g > start.g && mainColour.g < end.g) &&
-                (mainColour.b > start.b && mainColour.b < end.b)) return true;
+            if ((mainColour.r >= start.r && mainColour.r <= end.r) &&
+                (mainColour.g >= start.g && mainColour.g <= end.g) &&
+                (mainColour.b >= start.b && mainColour.b <= end.b)) return true;
 
             return false;
         }
