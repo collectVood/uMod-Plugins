@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.2")]
+    [Info("Coloured Chat", "collect_vood", "2.2.3")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -375,7 +375,7 @@ namespace Oxide.Plugins
                         continue;
                     }
                 }
-                else if (obj != null) return null;
+                else if (obj != null) return obj;
             }
 
             colouredChatMessage = ColouredChatMessage.FromDictionary(colouredChatMessageDict);
