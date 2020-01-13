@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.1")]
+    [Info("Coloured Chat", "collect_vood", "2.2.2")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -361,7 +361,7 @@ namespace Oxide.Plugins
 
             foreach (Plugin plugin in plugins.GetAll())
             {
-                object obj = Interface.Oxide.CallHook("OnColouredChat", colouredChatMessageDict);
+                object obj = plugin.CallHook("OnColouredChat", colouredChatMessageDict);
 
                 if (obj is Dictionary<string, object>)
                 {
