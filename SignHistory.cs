@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-	[Info("SignHistory", "collect_vood", "1.1.0")]
+	[Info("SignHistory", "collect_vood", "1.1.1")]
 	[Description("Creates a changelog for signs")]
 
 	class SignHistory : CovalencePlugin
@@ -90,7 +90,13 @@ namespace Oxide.Plugins
 
 			SaveData();
 		}
+		private void OnNewSave(string filename)
+		{
+			storedData.Signs = new Dictionary<uint, Sign>();
+			SaveData();
 
+			PrintWarning("Map wipe detected! Resetting all sign data.");
+		}
 		private void OnSignUpdated(Signage sign, BasePlayer player, string text) => LogSignChange(sign, player);
 
 		#endregion
