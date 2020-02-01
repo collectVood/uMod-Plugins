@@ -92,10 +92,10 @@ namespace Oxide.Plugins
 		}
 		private void OnNewSave(string filename)
 		{
+			PrintWarning("Map wipe detected! Resetting all sign data.");
+
 			storedData.Signs = new Dictionary<uint, Sign>();
 			SaveData();
-
-			PrintWarning("Map wipe detected! Resetting all sign data.");
 		}
 		private void OnSignUpdated(Signage sign, BasePlayer player, string text) => LogSignChange(sign, player);
 
