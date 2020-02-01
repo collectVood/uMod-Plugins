@@ -115,11 +115,8 @@ namespace Oxide.Plugins
 
         private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
 
-        private void OnServerSave()
-        {
-            ClearUpData();
-            SaveData();
-        }
+        private void OnServerSave() => ClearUpData();
+
         private void Unload() => SaveData();
 
         private void ClearUpData()
@@ -132,6 +129,8 @@ namespace Oxide.Plugins
                 if (colData.Value._lastActive == 0) continue;
                 if (colData.Value._lastActive + (config.inactivityRemovalTime * 3600) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) allPlayerData.Remove(colData.Key);
             }
+
+            SaveData();
         }
 
         #endregion
