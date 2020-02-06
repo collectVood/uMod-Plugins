@@ -6,7 +6,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("NoSleepers", "collect_vood", "0.5.3")]
+    [Info("NoSleepers", "collect_vood", "0.5.4")]
     [Description("Prevents players from sleeping and optionally removes player corpses and bags")]
 
     class NoSleepers : CovalencePlugin
@@ -59,6 +59,7 @@ namespace Oxide.Plugins
 
         private class StoredData
         {
+            [JsonProperty("All Player Data", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public Dictionary<string, PlayerData> AllPlayerData { get; private set; } = new Dictionary<string, PlayerData>();
         }
 
@@ -115,6 +116,14 @@ namespace Oxide.Plugins
 
         private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
 
+        private void LoadData()
+        {
+            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+            if (storedData == null) storedData = new StoredData();
+
+            SaveData();
+        }
+
         private void OnServerSave() => ClearUpData();
 
         private void Unload() => SaveData();
@@ -145,13 +154,13 @@ namespace Oxide.Plugins
 
             permission.RegisterPermission(config.permExclude, this);
 
-            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+            LoadData();
 
             if (!config.killExisting) return;
 
             var killCount = 0;
             var sleepers = BasePlayer.sleepingPlayerList;
-            foreach (var sleeper in sleepers.ToArray())
+            foreach (var sleeper in new HashSet<BasePlayer>(sleepers))
             {
                 if (!sleeper.IsDead() && !sleeper.IsDestroyed)
                 {
