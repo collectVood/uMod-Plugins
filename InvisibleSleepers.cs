@@ -2,9 +2,11 @@ using Network;
 using Newtonsoft.Json;
 using Oxide.Core.Plugins;
 using System.Collections.Generic;
+using UnityEngine;
+
 namespace Oxide.Plugins
 {
-    [Info("Invisible Sleepers", "collect_vood", "1.0.6")]
+    [Info("Invisible Sleepers", "collect_vood", "1.0.8")]
     [Description("Makes all sleepers invisible")]
     class InvisibleSleepers : RustPlugin
     {
@@ -83,12 +85,13 @@ namespace Oxide.Plugins
             }
             return null;
         }
-        private object CanBeTargeted(BaseCombatEntity entity)
+        private object CanNetworkTo(HeldEntity entity, BasePlayer target)
         {
-            BasePlayer player = entity as BasePlayer;
-            if (player == null)
-                return null;
-            if (player.IsSleeping() && HasPerm(player))
+            return entity == null ? null : CanNetworkTo(entity.GetOwnerPlayer(), target);
+        }        
+        private object CanBeTargeted(BasePlayer player, MonoBehaviour monoBehaviour)
+        {
+            if (player && player.IsSleeping() && HasPerm(player))
                 return false;
             return null;
         }
@@ -135,8 +138,11 @@ namespace Oxide.Plugins
         }
         void OnPlayerSleepEnded(BasePlayer player)
         {
-            if (player != null)
+            if (player != null) 
+            {
                 player.limitNetworking = false;
+                player.UpdatePlayerCollider(true);
+            }
         }
         #endregion
 
