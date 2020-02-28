@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
@@ -163,16 +164,16 @@ namespace Oxide.Plugins
                 return;
 
             var killCount = 0;
-            var sleepers = BasePlayer.sleepingPlayerList;
-            foreach (var sleeper in new HashSet<BasePlayer>(sleepers))
+            foreach (var ply in BasePlayer.sleepingPlayerList.ToList())
             {
-                if (!sleeper.IsDead() && !sleeper.IsDestroyed)
+                if (BasePlayer.activePlayerList.Contains(ply)) continue;
+                if (!ply.IsDestroyed)
                 {
-                    sleeper.Kill();
+                    ply.Kill();
                     killCount++;
                 }
-                //sleepers.Remove(sleeper);
             }
+
             if (killCount > 0) 
                 Puts($"Killed {killCount} {(killCount == 1 ? "sleeper" : "sleepers")}");
         }
