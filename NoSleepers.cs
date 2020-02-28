@@ -6,7 +6,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("NoSleepers", "collect_vood", "0.5.4")]
+    [Info("NoSleepers", "collect_vood", "0.5.5")]
     [Description("Prevents players from sleeping and optionally removes player corpses and bags")]
 
     class NoSleepers : CovalencePlugin
@@ -14,48 +14,48 @@ namespace Oxide.Plugins
 
         #region Config     
 
-        private Configuration config;
-        private class Configuration
+        private ConfigurationFile Configuration;
+        private class ConfigurationFile
         {
             [JsonProperty(PropertyName = "Kill existing")]
-            public bool killExisting = false;
+            public bool KillExisting = false;
             [JsonProperty(PropertyName = "Remove corpses")]
-            public bool removeCorpses = true;
+            public bool RemoveCorpses = true;
             [JsonProperty(PropertyName = "Remove bags")]
-            public bool removeBags = false;
+            public bool RemoveBags = false;
             [JsonProperty(PropertyName = "Save last position")]
-            public bool saveLastPosition = false;
+            public bool SaveLastPosition = false;
             [JsonProperty(PropertyName = "Save last inventory")]
-            public bool saveLastInventory = false;
+            public bool SaveLastInventory = false;
 
             [JsonProperty(PropertyName = "Exclude Permission")]
-            public string permExclude = "nosleepers.exclude";
+            public string PermExclude = "nosleepers.exclude";
 
             [JsonProperty(PropertyName = "Player Inactivity Data Removal (hours)")]
-            public int inactivityRemovalTime = 168;
+            public int InactivityRemovalTime = 168;
         }
 
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file");
-            config = new Configuration();
+            Configuration = new ConfigurationFile();
         }
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
-            config = Config.ReadObject<Configuration>();
+            Configuration = Config.ReadObject<ConfigurationFile>();
             SaveConfig();
         }
 
-        protected override void SaveConfig() => Config.WriteObject(config);
+        protected override void SaveConfig() => Config.WriteObject(Configuration);
 
         #endregion
 
         #region Data
 
-        private StoredData storedData;
-        private Dictionary<string, PlayerData> allPlayerData => storedData.AllPlayerData;
+        private StoredData AllStoredData;
+        private Dictionary<string, PlayerData> AllPlayerData => AllStoredData.AllPlayerData;
 
         private class StoredData
         {
@@ -66,13 +66,13 @@ namespace Oxide.Plugins
         public class PlayerData
         {
             [JsonProperty("Player Items")]
-            public List<PlayerItem> _playerItems;
+            public List<PlayerItem> PlayerItems;
 
             [JsonProperty("Last position")]
-            public Vector3 _lastPosition;
+            public Vector3 LastPosition;
 
             [JsonProperty("Last active")]
-            public long _lastActive = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            public long LastActive = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
           
             public PlayerData()
             {
@@ -82,44 +82,44 @@ namespace Oxide.Plugins
 
         public class PlayerItem
         {
-            public enum Container { Wear, Main, Belt }
+            public enum ContainerType { Wear, Main, Belt }
 
             [JsonProperty("Name")]
-            public string _shortName;
+            public string Shortname;
             [JsonProperty("Amount")]
-            public int _amount;
+            public int Amount;
             [JsonProperty("SkinId")]
-            public ulong _skinId;
+            public ulong SkinId;
             [JsonProperty("Position")]
-            public int _position;
+            public int Position;
             [JsonProperty("Condition")]
-            public float _condition;
+            public float Condition;
             [JsonProperty("Magazine")]
-            public int _magazine;
+            public int Magazine;
             [JsonProperty("Container")]
-            public Container _container;
+            public ContainerType Container;
             [JsonProperty("Mods")]
-            public List<int> _mods;
+            public List<int> Mods;
 
-            public PlayerItem(string shortName, int amount, ulong skinId, int position, float condition, int magazine, Container container, List<int> mods)
+            public PlayerItem(string shortName, int amount, ulong skinId, int position, float condition, int magazine, ContainerType container, List<int> mods)
             {
-                _shortName = shortName;
-                _amount = amount;
-                _skinId = skinId;
-                _position = position;
-                _condition = condition;
-                _magazine = magazine;
-                _container = container;
-                _mods = mods;
+                Shortname = shortName;
+                Amount = amount;
+                SkinId = skinId;
+                Position = position;
+                Condition = condition;
+                Magazine = magazine;
+                Container = container;
+                Mods = mods;
             }
         }
 
-        private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
+        private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, AllStoredData);
 
         private void LoadData()
         {
-            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
-            if (storedData == null) storedData = new StoredData();
+            AllStoredData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+            if (AllStoredData == null) AllStoredData = new StoredData();
 
             SaveData();
         }
@@ -130,13 +130,16 @@ namespace Oxide.Plugins
 
         private void ClearUpData()
         {
-            if (config.inactivityRemovalTime == 0) return;
+            if (Configuration.InactivityRemovalTime == 0) 
+                return;
 
-            var copy = new Dictionary<string, PlayerData>(allPlayerData);
+            var copy = new Dictionary<string, PlayerData>(AllPlayerData);
             foreach (var colData in copy)
             {
-                if (colData.Value._lastActive == 0) continue;
-                if (colData.Value._lastActive + (config.inactivityRemovalTime * 3600) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) allPlayerData.Remove(colData.Key);
+                if (colData.Value.LastActive == 0) 
+                    continue;
+                if (colData.Value.LastActive + (Configuration.InactivityRemovalTime * 3600) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) 
+                    AllPlayerData.Remove(colData.Key);
             }
 
             SaveData();
@@ -152,11 +155,12 @@ namespace Oxide.Plugins
             throw new NotSupportedException("This plugin does not support this game");
             #endif
 
-            permission.RegisterPermission(config.permExclude, this);
+            permission.RegisterPermission(Configuration.PermExclude, this);
 
             LoadData();
 
-            if (!config.killExisting) return;
+            if (!Configuration.KillExisting) 
+                return;
 
             var killCount = 0;
             var sleepers = BasePlayer.sleepingPlayerList;
@@ -167,9 +171,10 @@ namespace Oxide.Plugins
                     sleeper.Kill();
                     killCount++;
                 }
-                sleepers.Remove(sleeper);
+                //sleepers.Remove(sleeper);
             }
-            if (killCount > 0) Puts($"Killed {killCount} {(killCount == 1 ? "sleeper" : "sleepers")}");
+            if (killCount > 0) 
+                Puts($"Killed {killCount} {(killCount == 1 ? "sleeper" : "sleepers")}");
         }
 
         #endregion
@@ -178,40 +183,53 @@ namespace Oxide.Plugins
 
         void OnPlayerRespawned(BasePlayer player)
         {
-            if (player.IsSleeping() && !permission.UserHasPermission(player.UserIDString, config.permExclude))
+            if (player.IsSleeping() && !permission.UserHasPermission(player.UserIDString, Configuration.PermExclude))
             {
                 player.EndSleeping();
 
-                if (!allPlayerData.ContainsKey(player.UserIDString)) return;
-                var playerData = allPlayerData[player.UserIDString];
-                if (playerData._playerItems != null) GivePlayerItems(player, playerData._playerItems);
-                playerData._playerItems = null;
-                if (playerData._lastPosition == Vector3.zero) allPlayerData.Remove(player.UserIDString);
+                if (!AllPlayerData.ContainsKey(player.UserIDString)) 
+                    return;
+
+                var playerData = AllPlayerData[player.UserIDString];
+                if (playerData.PlayerItems != null) 
+                    GivePlayerItems(player, playerData.PlayerItems);
+
+                AllPlayerData.Remove(player.UserIDString);
             }
         }
 
         object OnPlayerRespawn(BasePlayer player)
         {
-            if (!allPlayerData.ContainsKey(player.UserIDString)) return null;
-            var playerData = allPlayerData[player.UserIDString];
-            if (playerData._lastPosition == Vector3.zero) return null;
-            Vector3 latestPos = playerData._lastPosition;
-            playerData._lastPosition = Vector3.zero;
+            if (!AllPlayerData.ContainsKey(player.UserIDString)) 
+                return null;
+
+            var playerData = AllPlayerData[player.UserIDString];
+            if (playerData.LastPosition == Vector3.zero) 
+                return null;
+
+            Vector3 latestPos = playerData.LastPosition;
+            playerData.LastPosition = Vector3.zero;
 
             return new BasePlayer.SpawnPoint { pos = latestPos };
         }
 
         void OnPlayerDisconnected(BasePlayer player)
         {
-            if (!player.IsDestroyed && !permission.UserHasPermission(player.UserIDString, config.permExclude))
+            if (!player.IsDestroyed && !permission.UserHasPermission(player.UserIDString, Configuration.PermExclude))
             {
-                if (config.saveLastPosition || config.saveLastInventory)
+                if (Configuration.SaveLastPosition || Configuration.SaveLastInventory)
                 {
                     var playerData = new PlayerData();
-                    if (config.saveLastPosition) playerData._lastPosition = player.transform.position;
-                    if (config.saveLastInventory) playerData._playerItems = GetAllItems(player.inventory);
-                    if (allPlayerData.ContainsKey(player.UserIDString)) allPlayerData[player.UserIDString] = playerData;
-                    else allPlayerData.Add(player.UserIDString, playerData);
+
+                    if (Configuration.SaveLastPosition)
+                        playerData.LastPosition = player.transform.position;
+                    if (Configuration.SaveLastInventory)
+                        playerData.PlayerItems = GetAllItems(player.inventory);
+
+                    if (AllPlayerData.ContainsKey(player.UserIDString))
+                        AllPlayerData[player.UserIDString] = playerData;
+                    else 
+                        AllPlayerData.Add(player.UserIDString, playerData);
                 }
 
                 player.Kill();
@@ -223,7 +241,9 @@ namespace Oxide.Plugins
             if (arg.cmd.Name == "sleep")
             {
                 var bPlayer = arg.Player();
-                if (bPlayer == null || bPlayer.IsAdmin || permission.UserHasPermission(bPlayer.UserIDString, config.permExclude)) return null;
+                if (bPlayer == null || bPlayer.IsAdmin || permission.UserHasPermission(bPlayer.UserIDString, Configuration.PermExclude)) 
+                    return null;
+
                 return false;
             }
             return null;
@@ -231,8 +251,10 @@ namespace Oxide.Plugins
 
         void OnEntitySpawned(BaseNetworkable entity)
         {
-            if (config.removeCorpses && entity.ShortPrefabName.Equals("player_corpse")) entity.Kill();
-            if (config.removeBags && entity.ShortPrefabName.Equals("item_drop_backpack")) entity.Kill();
+            if (Configuration.RemoveCorpses && entity.ShortPrefabName.Equals("player_corpse")) 
+                entity.Kill();
+            if (Configuration.RemoveBags && entity.ShortPrefabName.Equals("item_drop_backpack")) 
+                entity.Kill();
         }
 
         //object OnPlayerSleep(BasePlayer player) => true; // TODO: Hook might be causing local player duplication
@@ -259,7 +281,7 @@ namespace Oxide.Plugins
                         mods.Add(contentItem.info.itemid);
                     };
                 }
-                playerItems.Add(new PlayerItem(item.info.shortname, item.amount, item.skin, item.position, item.condition, magazine, PlayerItem.Container.Belt, mods));
+                playerItems.Add(new PlayerItem(item.info.shortname, item.amount, item.skin, item.position, item.condition, magazine, PlayerItem.ContainerType.Belt, mods));
 
             }
             foreach (var item in inventory.containerMain.itemList)
@@ -276,11 +298,11 @@ namespace Oxide.Plugins
                         mods.Add(contentItem.info.itemid);
                     };
                 }
-                playerItems.Add(new PlayerItem(item.info.shortname, item.amount, item.skin, item.position, item.condition, magazine, PlayerItem.Container.Main, mods));
+                playerItems.Add(new PlayerItem(item.info.shortname, item.amount, item.skin, item.position, item.condition, magazine, PlayerItem.ContainerType.Main, mods));
             }
             foreach (var item in inventory.containerWear.itemList)
             {
-                playerItems.Add(new PlayerItem(item.info.shortname, item.amount, item.skin, item.position, item.condition, 0, PlayerItem.Container.Wear, new List<int>()));
+                playerItems.Add(new PlayerItem(item.info.shortname, item.amount, item.skin, item.position, item.condition, 0, PlayerItem.ContainerType.Wear, new List<int>()));
             }
             return playerItems;
         }
@@ -294,25 +316,25 @@ namespace Oxide.Plugins
 
             foreach (var playerItem in playerItems)
             {
-                var item = ItemManager.CreateByName(playerItem._shortName, playerItem._amount, playerItem._skinId);
+                var item = ItemManager.CreateByName(playerItem.Shortname, playerItem.Amount, playerItem.SkinId);
                 var weapon = item.GetHeldEntity() as BaseProjectile;
-                if (weapon != null) weapon.primaryMagazine.contents = playerItem._magazine;
-                item.condition = playerItem._condition;
+                if (weapon != null) weapon.primaryMagazine.contents = playerItem.Magazine;
+                item.condition = playerItem.Condition;
 
-                switch (playerItem._container)
+                switch (playerItem.Container)
                 {
-                    case PlayerItem.Container.Belt:
-                        item.MoveToContainer(player.inventory.containerBelt, playerItem._position);
+                    case PlayerItem.ContainerType.Belt:
+                        item.MoveToContainer(player.inventory.containerBelt, playerItem.Position);
                         break;
-                    case PlayerItem.Container.Main:
-                        item.MoveToContainer(player.inventory.containerMain, playerItem._position);
+                    case PlayerItem.ContainerType.Main:
+                        item.MoveToContainer(player.inventory.containerMain, playerItem.Position);
                         break;
-                    case PlayerItem.Container.Wear:
-                        item.MoveToContainer(player.inventory.containerWear, playerItem._position);
+                    case PlayerItem.ContainerType.Wear:
+                        item.MoveToContainer(player.inventory.containerWear, playerItem.Position);
                         break;
                 }
 
-                foreach (var mod in playerItem._mods)
+                foreach (var mod in playerItem.Mods)
                 {
                     Item modItem = ItemManager.CreateByItemID(mod, 1, 0);
 
