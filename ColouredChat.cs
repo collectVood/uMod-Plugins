@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.4")]
+    [Info("Coloured Chat", "collect_vood", "2.2.5")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -352,6 +352,7 @@ namespace Oxide.Plugins
                 objArray[3] = message;
                 ServerConsole.PrintColoured(objArray);
             }
+
             string formattedMsg = string.Format("{0}[{1}]", new string[] { player.displayName.EscapeRichText(), player.UserIDString });
 
             var colouredChatMessage = FromMessage(player.IPlayer, message);
@@ -946,7 +947,8 @@ namespace Oxide.Plugins
                 }
             }
 
-            return new ColouredChatMessage(player, (playerUserName == player.Name && BetterChatIns()) ? string.Empty : playerUserName, (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour, playerMessage);
+            return new ColouredChatMessage(player, (playerUserName == player.Name && BetterChatIns()) ? string.Empty : playerUserName, 
+                (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour, playerMessage);
         }
 
         bool IsInHexRange(string hexCode,string rangeHexCode1, string rangeHexCode2)
@@ -968,6 +970,8 @@ namespace Oxide.Plugins
         #endregion
 
         #region API
+
+        private Dictionary<string, object> API_GetMessageData(IPlayer iPlayer, string message) => FromMessage(iPlayer, message).ToDictionary();
 
         public class ColouredChatMessage
         {
