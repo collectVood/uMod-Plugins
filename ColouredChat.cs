@@ -426,6 +426,39 @@ namespace Oxide.Plugins
 
                 var colouredChatMessage = FromMessage(player, dict["Message"].ToString());
 
+                #region API
+
+                var colouredChatMessageDict = colouredChatMessage.ToDictionary();
+
+                foreach (Plugin plugin in plugins.GetAll())
+                {
+                    object obj = plugin.CallHook("OnColouredChat", colouredChatMessageDict);
+
+                    if (obj is Dictionary<string, object>)
+                    {
+                        try
+                        {
+                            colouredChatMessageDict = obj as Dictionary<string, object>;
+                        }
+                        catch (Exception e)
+                        {
+                            PrintError($"Failed to load modified OnColouredChat hook data from plugin '{plugin.Title} ({plugin.Version})':{Environment.NewLine}{e}");
+                            continue;
+                        }
+                    }
+                    else if (obj != null)
+                    {
+                        if (obj is bool)
+                        {
+                            dict["CancelOption"] = 2;
+                        }
+                    }
+                }
+
+                colouredChatMessage = ColouredChatMessage.FromDictionary(colouredChatMessageDict);
+
+                #endregion
+
                 if (!string.IsNullOrEmpty(colouredChatMessage.Name)) dict["Username"] = colouredChatMessage.Name;
                 if (!string.IsNullOrEmpty(colouredChatMessage.Colour)) { ((Dictionary<string, object>)dict["UsernameSettings"])["Color"] = colouredChatMessage.Colour; }
                 dict["Message"] = colouredChatMessage.Message;
@@ -947,7 +980,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            return new ColouredChatMessage(player, (playerUserName == player.Name && BetterChatIns()) ? string.Empty : playerUserName, 
+            return new ColouredChatMessage(player, playerUserName, 
                 (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour, playerMessage);
         }
 
