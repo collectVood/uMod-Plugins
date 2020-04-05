@@ -7,7 +7,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("NoSleepers", "collect_vood", "0.5.5")]
+    [Info("NoSleepers", "collect_vood", "0.5.6")]
     [Description("Prevents players from sleeping and optionally removes player corpses and bags")]
 
     class NoSleepers : CovalencePlugin
@@ -169,7 +169,7 @@ namespace Oxide.Plugins
                 if (BasePlayer.activePlayerList.Contains(ply)) continue;
                 if (!ply.IsDestroyed)
                 {
-                    ply.Kill();
+                    ply.Die();
                     killCount++;
                 }
             }
@@ -233,7 +233,7 @@ namespace Oxide.Plugins
                         AllPlayerData.Add(player.UserIDString, playerData);
                 }
 
-                player.Kill();
+                player.Die();
             }
         }
 
