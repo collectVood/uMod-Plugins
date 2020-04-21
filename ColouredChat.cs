@@ -20,7 +20,9 @@ namespace Oxide.Plugins
 
         #region Constants
 
-        const string colourRegex = "^#(?:[0-9a-fA-f]{3}){1,2}$";
+        private const string ColourRegex = "^#(?:[0-9a-fA-f]{3}){1,2}$";
+
+        private const string ChatFormat = "{0}: {1}";
 
         #endregion
 
@@ -313,31 +315,31 @@ namespace Oxide.Plugins
             ClearUpData();
         }
 
-        void OnUserConnected(IPlayer player)
+        private void OnUserConnected(IPlayer player)
         {
             if (!allColourData.ContainsKey(player.Id)) return;
             allColourData[player.Id].LastActive = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         }
 
-        void OnUserDisconnected(IPlayer player)
+        private void OnUserDisconnected(IPlayer player)
         {
             if (!allColourData.ContainsKey(player.Id)) return;
             allColourData[player.Id].LastActive = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         }
 
-        void OnUserNameUpdated(string id, string oldName, string newName) => ClearCache(id);
+        private void OnUserNameUpdated(string id, string oldName, string newName) => ClearCache(id);
 
-        void OnUserGroupAdded(string id, string groupName) => ClearCache(id);
+        private void OnUserGroupAdded(string id, string groupName) => ClearCache(id);
 
-        void OnUserGroupRemoved(string id, string groupName) => ClearCache(id);
+        private void OnUserGroupRemoved(string id, string groupName) => ClearCache(id);
 
-        void OnGroupDeleted(string name) => ClearCache();
+        private void OnGroupDeleted(string name) => ClearCache();
 
-        void OnGroupPermissionGranted(string name, string perm) => ClearCache();
+        private void OnGroupPermissionGranted(string name, string perm) => ClearCache();
 
-        void OnGroupPermissionRevoked(string name, string perm) => ClearCache();
+        private void OnGroupPermissionRevoked(string name, string perm) => ClearCache();
 
-        object OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel)
+        private object OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel)
         {
             if (BetterChatIns()) return null;
             if (config.blockChatMute && BetterChatMuteIns()) if (BetterChatMute.Call<bool>("API_IsMuted", player.IPlayer)) return null;
@@ -353,9 +355,7 @@ namespace Oxide.Plugins
                 ServerConsole.PrintColoured(objArray);
             }
 
-            string formattedMsg = string.Format("{0}[{1}]", new string[] { player.displayName.EscapeRichText(), player.UserIDString });
-
-            var colouredChatMessage = FromMessage(player.IPlayer, message);
+            var colouredChatMessage = FromMessage(player.IPlayer, channel, message);
             var colouredChatMessageDict = colouredChatMessage.ToDictionary();
 
             #region API
@@ -383,48 +383,18 @@ namespace Oxide.Plugins
 
             #endregion
 
-            if (channel == Chat.ChatChannel.Global)
-            {
-                foreach (BasePlayer Player in BasePlayer.activePlayerList)
-                {
-                    Player.SendConsoleCommand("chat.add2", 0, player.userID, colouredChatMessage.Message, colouredChatMessage.Name, colouredChatMessage.Colour);
-                }
-                DebugEx.Log(string.Concat("[CHAT] ", formattedMsg, " : ", message), StackTraceLogType.None);
-            }
-            else if (channel == Chat.ChatChannel.Team)
-            {
-                foreach (ulong memberId in player.Team.members)
-                {
-                    BasePlayer member;
-                    if ((member = BasePlayer.FindByID(memberId)) != null)
-                    {
-                        member.SendConsoleCommand("chat.add2", 1, player.userID, colouredChatMessage.Message, colouredChatMessage.Name, colouredChatMessage.Colour);
-                    }
-                }
-                DebugEx.Log(string.Concat("[TEAM CHAT] ", formattedMsg, " : ", message), StackTraceLogType.None);
-            }
-            else return null;
-
-            Chat.ChatEntry chatentry = new Chat.ChatEntry
-            {
-                Channel = channel,
-                Message = message,
-                UserId = player.UserIDString,
-                Username = player.displayName,
-                Color = colouredChatMessage.Colour,
-                Time = Facepunch.Math.Epoch.Current
-            };
-            Facepunch.RCon.Broadcast(Facepunch.RCon.LogType.Chat, chatentry);          
+            SendMessage(colouredChatMessage);
             return true;
         }
 
-        Dictionary<string, object> OnBetterChat(Dictionary<string, object> dict)
+        private Dictionary<string, object> OnBetterChat(Dictionary<string, object> dict)
         {
             if (dict != null)
             {
                 IPlayer player = dict["Player"] as IPlayer;
 
-                var colouredChatMessage = FromMessage(player, dict["Message"].ToString());
+                var colouredChatMessage = FromMessage(player, (Chat.ChatChannel)dict["ChatChannel"], 
+                    dict["Message"].ToString());
 
                 #region API
 
@@ -482,31 +452,31 @@ namespace Oxide.Plugins
 
         #region Helpers
 
-        bool BetterChatIns() => (BetterChat != null && BetterChat.IsLoaded);
-        bool BetterChatMuteIns() => (BetterChatMute != null && BetterChatMute.IsLoaded);
-        bool ZoneManagerIns() => (ZoneManager != null && ZoneManager.IsLoaded);
-        bool IsValidColour(string input) => Regex.Match(input, colourRegex).Success;
-        string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
+        private bool BetterChatIns() => (BetterChat != null && BetterChat.IsLoaded);
+        private bool BetterChatMuteIns() => (BetterChatMute != null && BetterChatMute.IsLoaded);
+        private bool ZoneManagerIns() => (ZoneManager != null && ZoneManager.IsLoaded);
+        private bool IsValidColour(string input) => Regex.Match(input, ColourRegex).Success;
+        private string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
 
         //Name
-        bool HasNameShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermShow));
-        bool HasNamePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermUse));
-        bool HasNameRainbow(IPlayer player) => (permission.UserHasPermission(player.Id, config.namePermRainbow));
-        bool CanNameGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermGradient));
-        bool CanNameBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermBypass));
-        bool CanNameSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermSetOthers));
-        bool CanNameRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermRandomColour));
+        private bool HasNameShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermShow));
+        private bool HasNamePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermUse));
+        private bool HasNameRainbow(IPlayer player) => (permission.UserHasPermission(player.Id, config.namePermRainbow));
+        private bool CanNameGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermGradient));
+        private bool CanNameBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermBypass));
+        private bool CanNameSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermSetOthers));
+        private bool CanNameRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermRandomColour));
 
         //Message
-        bool HasMessageShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermShow));
-        bool HasMessagePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermUse));
-        bool HasMessageRainbow(IPlayer player) => (permission.UserHasPermission(player.Id, config.messagePermRainbow));
-        bool CanMessageGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermGradient));
-        bool CanMessageBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermBypass));
-        bool CanMessageSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermSetOthers));
-        bool CanMessageRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermRandomColour));
+        private bool HasMessageShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermShow));
+        private bool HasMessagePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermUse));
+        private bool HasMessageRainbow(IPlayer player) => (permission.UserHasPermission(player.Id, config.messagePermRainbow));
+        private bool CanMessageGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermGradient));
+        private bool CanMessageBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermBypass));
+        private bool CanMessageSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermSetOthers));
+        private bool CanMessageRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermRandomColour));
 
-        bool IsValidName(string input, IPlayer iPlayer = null)
+        private bool IsValidName(string input, IPlayer iPlayer = null)
         {
             if (iPlayer != null && CanNameBypass(iPlayer)) return true;
             if (config.nameUseBlacklist)
@@ -532,7 +502,7 @@ namespace Oxide.Plugins
             return true;
         }
 
-        bool IsValidMessage(string input, IPlayer iPlayer = null)
+        private bool IsValidMessage(string input, IPlayer iPlayer = null)
         {
             if (iPlayer != null && CanMessageBypass(iPlayer)) return true;
             if (config.messageUseBlacklist)
@@ -558,7 +528,54 @@ namespace Oxide.Plugins
             return true;
         }
 
-        void ProcessColourCommand(IPlayer player, string cmd, string[] args, bool isMessage = false)
+        private void SendMessage(ColouredChatMessage colouredChatMessage, List<BasePlayer> players = null)
+        {
+            var player = colouredChatMessage.Player.Object as BasePlayer;
+            string formattedMsg = string.Format("{0}[{1}]", new string[] { player?.displayName?.EscapeRichText() ?? string.Empty, player?.UserIDString ?? string.Empty });
+
+            string chatMessage = colouredChatMessage.GetChatOutput();
+            var receivers = new ListHashSet<BasePlayer>();
+
+            if (players != null)
+            {
+                foreach (var ply in players)
+                {
+                    ply.SendConsoleCommand("chat.add2", (int)colouredChatMessage.ChatChannel, player.userID, colouredChatMessage.Message, colouredChatMessage.Name, colouredChatMessage.Colour);
+                }
+                DebugEx.Log(string.Concat("[LIMITED CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
+            }
+            else if (colouredChatMessage.ChatChannel == Chat.ChatChannel.Global)
+            {
+                receivers = BasePlayer.activePlayerList;
+                DebugEx.Log(string.Concat("[CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
+            }
+            else if (colouredChatMessage.ChatChannel == Chat.ChatChannel.Team)
+            {
+                if (player?.Team == null) return;
+                foreach (ulong memberId in player.Team.members)
+                {
+                    BasePlayer member;
+                    if ((member = RelationshipManager.FindByID(memberId)) != null) receivers.Add(member);
+                }
+                DebugEx.Log(string.Concat("[TEAM CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
+            }
+
+            foreach (var receiver in receivers)
+                receiver.SendConsoleCommand("chat.add", new object[] { (int)colouredChatMessage.ChatChannel, player.userID, chatMessage });
+
+            Chat.ChatEntry chatentry = new Chat.ChatEntry
+            {
+                Channel = colouredChatMessage.ChatChannel,
+                Message = colouredChatMessage.Message,
+                UserId = player.UserIDString,
+                Username = player.displayName,
+                Color = colouredChatMessage.Colour,
+                Time = Facepunch.Math.Epoch.Current
+            };
+            Facepunch.RCon.Broadcast(Facepunch.RCon.LogType.Chat, chatentry);
+        }
+
+        private void ProcessColourCommand(IPlayer player, string cmd, string[] args, bool isMessage = false)
         {
             if (args.Length < 1)
             {
@@ -620,7 +637,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void ProcessColoursCommand(IPlayer player, string cmd, string[] args, bool isMessage = false)
+        private void ProcessColoursCommand(IPlayer player, string cmd, string[] args, bool isMessage = false)
         {
             if ((!isMessage && !HasNamePerm(player)) || (isMessage && !HasMessagePerm(player)))
             {
@@ -708,9 +725,9 @@ namespace Oxide.Plugins
             player.Reply(GetMessage("ColoursInfo", player, availableCommands, additionalInfo));
         }
 
-        string ProcessColourMessage(string message, string colour) => $"<color={colour}>" + message + "</color>";
+        private string ProcessColourMessage(string message, string colour) => $"<color={colour}>" + message + "</color>";
 
-        void ProcessColour(IPlayer player, IPlayer target, string colLower, string[] colours, bool isMessage = false, string groupName = "")
+        private void ProcessColour(IPlayer player, IPlayer target, string colLower, string[] colours, bool isMessage = false, string groupName = "")
         {
             bool isGroup = false;
             if (!string.IsNullOrEmpty(groupName)) isGroup = true;
@@ -824,7 +841,7 @@ namespace Oxide.Plugins
             if (isGroup) ClearCache();
         }
 
-        string ProcessGradient(string name, string[] colourArgs, bool isMessage = false, IPlayer iPlayer = null)
+        private string ProcessGradient(string name, string[] colourArgs, bool isMessage = false, IPlayer iPlayer = null)
         {           
             var chars = name.ToCharArray();
             string gradientName = string.Empty;
@@ -865,9 +882,9 @@ namespace Oxide.Plugins
                 gradientName += $"<color=#{ColorUtility.ToHtmlStringRGB(colours[i])}>{chars[i]}</color>";
             }
             return gradientName;
-        } 
+        }
 
-        List<Color> GetGradients(Color start, Color end, int steps)
+        private List<Color> GetGradients(Color start, Color end, int steps)
         {
             var colours = new List<Color>();
 
@@ -882,11 +899,11 @@ namespace Oxide.Plugins
             return colours;
         }
 
-        string GetRndColour() => String.Format("#{0:X6}", new System.Random().Next(0x1000000));
+        private string GetRndColour() => String.Format("#{0:X6}", new System.Random().Next(0x1000000));
 
-        string IsInvalidCharacter(string input) => (config.blockedValues.Where(x => input.Contains(x)).FirstOrDefault()) ?? null;
+        private string IsInvalidCharacter(string input) => (config.blockedValues.Where(x => input.Contains(x)).FirstOrDefault()) ?? null;
 
-        void ClearUpData()
+        private void ClearUpData()
         {
             if (config.inactivityRemovalTime == 0) return;
 
@@ -898,20 +915,20 @@ namespace Oxide.Plugins
             }
         }
 
-        void ClearCache()
+        private void ClearCache()
         {
             var cachedCopy = new Dictionary<string, CachePlayerData>(cachedData);
             foreach (var cache in cachedCopy) cachedData.Remove(cache.Key);
         }
 
-        void ClearCache(string Id)
+        private void ClearCache(string Id)
         {
             if (cachedData.ContainsKey(Id)) cachedData.Remove(Id);
         }
 
-        string GetCorrectLang(bool isGroup, bool isMessage, string key) => isGroup ? (isMessage ? "Group " + key + " message" : "Group " + key + " name") : isMessage ? "Message" : "Name";
+        private string GetCorrectLang(bool isGroup, bool isMessage, string key) => isGroup ? (isMessage ? "Group " + key + " message" : "Group " + key + " name") : isMessage ? "Message" : "Name";
 
-        string GetPrimaryUserGroup(string Id)
+        private string GetPrimaryUserGroup(string Id)
         {
             var groups = permission.GetUserGroups(Id);
 
@@ -930,7 +947,7 @@ namespace Oxide.Plugins
             return primaryGroup;
         }
 
-        ColouredChatMessage FromMessage(IPlayer player, string message)
+        private ColouredChatMessage FromMessage(IPlayer player, Chat.ChatChannel channel, string message)
         {
             string playerUserName = player.Name;
             string playerColour = player.IsAdmin ? "#af5" : "#5af";
@@ -980,11 +997,11 @@ namespace Oxide.Plugins
                 }
             }
 
-            return new ColouredChatMessage(player, playerUserName, 
+            return new ColouredChatMessage(player, channel, playerUserName, 
                 (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour, playerMessage);
         }
 
-        bool IsInHexRange(string hexCode,string rangeHexCode1, string rangeHexCode2)
+        private bool IsInHexRange(string hexCode,string rangeHexCode1, string rangeHexCode2)
         {
             Color mainColour;
             ColorUtility.TryParseHtmlString(hexCode, out mainColour);
@@ -1004,11 +1021,30 @@ namespace Oxide.Plugins
 
         #region API
 
-        private Dictionary<string, object> API_GetMessageData(IPlayer iPlayer, string message) => FromMessage(iPlayer, message).ToDictionary();
+        private string API_GetColouredChatMessage(IPlayer iPlayer, Chat.ChatChannel channel,
+            string message)
+        {
+            var colouredChatMessage = FromMessage(iPlayer, channel, message);
+
+            string formattedMessage = colouredChatMessage.GetChatOutput();
+
+            if (BetterChatIns())
+            {
+                Dictionary<string, object> betterChatMessageData = BetterChat.CallHook("API_GetMessageData", iPlayer, message) as Dictionary<string, object>;
+
+                if (!string.IsNullOrEmpty(colouredChatMessage.Name)) betterChatMessageData["Username"] = colouredChatMessage.Name;
+                if (!string.IsNullOrEmpty(colouredChatMessage.Colour)) { ((Dictionary<string, object>)betterChatMessageData["UsernameSettings"])["Color"] = colouredChatMessage.Colour; }
+
+                formattedMessage = BetterChat.CallHook("API_GetFormattedMessageFromDict", betterChatMessageData) as string;
+            }
+
+            return formattedMessage;
+        }
 
         public class ColouredChatMessage
         {
             public IPlayer Player;
+            public Chat.ChatChannel ChatChannel;
             public string Name;
             public string Colour;
             public string Message;
@@ -1018,9 +1054,10 @@ namespace Oxide.Plugins
 
             }
 
-            public ColouredChatMessage(IPlayer player, string name, string colour, string message)
+            public ColouredChatMessage(IPlayer player, Chat.ChatChannel chatChannel, string name, string colour, string message)
             {
                 Player = player;
+                ChatChannel = chatChannel;
                 Name = name;
                 Colour = colour;
                 Message = message;
@@ -1029,6 +1066,7 @@ namespace Oxide.Plugins
             public Dictionary<string, object> ToDictionary() => new Dictionary<string, object>
             {
                 [nameof(Player)] = Player,
+                [nameof(ChatChannel)] = ChatChannel,
                 [nameof(Name)] = Name,
                 [nameof(Colour)] = Colour,
                 [nameof(Message)] = Message
@@ -1039,11 +1077,17 @@ namespace Oxide.Plugins
                 return new ColouredChatMessage()
                 {
                     Player = dict[nameof(Player)] as IPlayer,
+                    ChatChannel = (Chat.ChatChannel)dict[nameof(ChatChannel)],
                     Name = dict[nameof(Name)] as string,
                     Colour = dict[nameof(Colour)] as string,
                     Message = dict[nameof(Message)] as string,
                 };
-            }           
+            }     
+            
+            public string GetChatOutput()
+            {
+                return string.Format(ChatFormat, Name, Message);
+            }
         }
         
         #endregion
