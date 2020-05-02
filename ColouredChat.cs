@@ -1049,8 +1049,7 @@ namespace Oxide.Plugins
             var playerData = new PlayerData();
             if (allColourData.ContainsKey(iPlayer.Id)) playerData = allColourData[iPlayer.Id];
 
-            if (playerData.NameGradientArgs != null) colour = string.Join(" ", playerData.NameGradientArgs);
-            else if (!string.IsNullOrEmpty(playerData.NameColour)) colour = playerData.NameColour;
+            if (!string.IsNullOrEmpty(playerData.NameColour)) colour = playerData.NameColour;
 
             string userPrimaryGroup = cachedData[iPlayer.Id].PrimaryGroup;
             if (allColourData.ContainsKey(userPrimaryGroup))
@@ -1058,9 +1057,15 @@ namespace Oxide.Plugins
                 var groupData = allColourData[userPrimaryGroup];
                 if (colour == colourNonModified)
                 {
-                    if (groupData.NameGradientArgs != null) colour = string.Join(" ", groupData.NameGradientArgs);
-                    else if (!string.IsNullOrEmpty(groupData.NameColour)) colour = groupData.NameColour;
+                    if (!string.IsNullOrEmpty(groupData.NameColour)) colour = groupData.NameColour;
                 }
+            }
+
+            if (BetterChatIns())
+            {
+                Dictionary<string, object> betterChatMessageData = BetterChat.CallHook("API_GetMessageData", iPlayer, "Temp") as Dictionary<string, object>;
+
+                colour = ((Dictionary<string, object>)betterChatMessageData["UsernameSettings"])["Color"] as string;            
             }
 
             return colour;
