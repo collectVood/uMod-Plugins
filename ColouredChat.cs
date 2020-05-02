@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.5")]
+    [Info("Coloured Chat", "collect_vood", "2.2.6")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -1039,6 +1039,31 @@ namespace Oxide.Plugins
             }
 
             return formattedMessage;
+        }
+
+        private string API_GetNameColourHex(IPlayer iPlayer)
+        {
+            string colour = iPlayer.IsAdmin ? "#af5" : "#5af";
+            string colourNonModified = colour;
+
+            var playerData = new PlayerData();
+            if (allColourData.ContainsKey(iPlayer.Id)) playerData = allColourData[iPlayer.Id];
+
+            if (playerData.NameGradientArgs != null) colour = string.Join(" ", playerData.NameGradientArgs);
+            else if (!string.IsNullOrEmpty(playerData.NameColour)) colour = playerData.NameColour;
+
+            string userPrimaryGroup = cachedData[iPlayer.Id].PrimaryGroup;
+            if (allColourData.ContainsKey(userPrimaryGroup))
+            {
+                var groupData = allColourData[userPrimaryGroup];
+                if (colour == colourNonModified)
+                {
+                    if (groupData.NameGradientArgs != null) colour = string.Join(" ", groupData.NameGradientArgs);
+                    else if (!string.IsNullOrEmpty(groupData.NameColour)) colour = groupData.NameColour;
+                }
+            }
+
+            return colour;
         }
 
         public class ColouredChatMessage
