@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Better Chat Mute Voice", "collect_vood", "1.0.2")]
+    [Info("Better Chat Mute Voice", "collect_vood", "1.0.3")]
     [Description("Adds voice mute to better chat muted players")]
     public class BetterChatMuteVoice : CovalencePlugin
     {
@@ -14,7 +14,7 @@ namespace Oxide.Plugins
 
         #region Variables
 
-        public List<string> MuteCache;
+        public HashSet<string> MuteCache;
 
         #endregion
 
@@ -22,9 +22,15 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
-            var muteList = BetterChatMute?.Call("API_GetMuteList") as List<string>;
+            if (BetterChatMute == null || !BetterChatMute.IsLoaded)
+            {
+                return;
+            }
 
-            MuteCache = new List<string>(muteList);
+            var muteList = BetterChatMute?.Call("API_GetMuteList") as List<string>;
+            MuteCache = new HashSet<string>(muteList);
+
+            if (MuteCache.Count < 1) Unsubscribe(nameof(OnPlayerVoice));
         }
 
         private object OnPlayerVoice(BasePlayer player)
@@ -52,16 +58,16 @@ namespace Oxide.Plugins
 
         private void HandleRemoveMute(string playerId)
         {
-            if (!MuteCache.Contains(playerId)) return;
-
             MuteCache.Remove(playerId);
+
+            if (MuteCache.Count < 1) Unsubscribe(nameof(OnPlayerVoice));
         }        
         
         private void HandleAddMute(string playerId)
         {
-            if (MuteCache.Contains(playerId)) return;
-
             MuteCache.Add(playerId);
+
+            if (MuteCache.Count == 1) Subscribe(nameof(OnPlayerVoice));
         }
 
         #endregion
