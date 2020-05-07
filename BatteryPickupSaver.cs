@@ -47,7 +47,7 @@ namespace Oxide.Plugins
                 {
                     Puts("Pickup: Found capacity data");
                 }
-                Puts($"Pickup: Charge: {battery.capacitySeconds} | Ent Id: {entity.net.ID}");
+                Puts($"Pickup: Charge: {battery.maxCapactiySeconds} | Ent Id: {entity.net.ID}");
             }
             return true;
         }
@@ -57,7 +57,7 @@ namespace Oxide.Plugins
             if ((battery = entity as ElectricBattery) != null)
             {
                 if (!((entity.gameObject?.GetComponent<CapacityData>()) != null))
-                    CapacityData.CreateComponent(battery.gameObject, battery.capacitySeconds);
+                    CapacityData.CreateComponent(battery.gameObject, battery.maxCapactiySeconds);
                 else
                     Puts("Spawned: Found data");
                 //Puts($"Spawned: Charge: {battery.capacitySeconds} | Ent Id: {entity.net.ID}");

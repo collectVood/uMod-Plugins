@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Better Chat Mute Voice", "collect_vood", "1.0.3")]
+    [Info("Better Chat Mute Voice", "collect_vood", "1.0.4")]
     [Description("Adds voice mute to better chat muted players")]
     public class BetterChatMuteVoice : CovalencePlugin
     {
@@ -14,7 +14,7 @@ namespace Oxide.Plugins
 
         #region Variables
 
-        public HashSet<string> MuteCache;
+        public HashSet<string> MuteCache = new HashSet<string>();
 
         #endregion
 
@@ -24,11 +24,14 @@ namespace Oxide.Plugins
         {
             if (BetterChatMute == null || !BetterChatMute.IsLoaded)
             {
-                return;
+                PrintWarning("BetterChatMute is required for this plugin to work.");
+            }
+            else
+            {
+                var muteList = BetterChatMute.Call("API_GetMuteList") as List<string>;
+                MuteCache = new HashSet<string>(muteList);
             }
 
-            var muteList = BetterChatMute?.Call("API_GetMuteList") as List<string>;
-            MuteCache = new HashSet<string>(muteList);
 
             if (MuteCache.Count < 1) Unsubscribe(nameof(OnPlayerVoice));
         }
