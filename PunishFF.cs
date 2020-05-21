@@ -26,9 +26,7 @@ namespace Oxide.Plugins
 *********************************************   
 *=======================================================================================================================*/
 
-        //permissions
-        
-    class PunishFF : CovalencePlugin
+    public class PunishFF : CovalencePlugin
     {
         [PluginReference]
         private Plugin FriendlyFire;
@@ -38,72 +36,81 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
-                { "PunishFriendlyFire", "Friend punishment damage: {0}" },
+                { "PunishFriendlyFire", "Friendly fire punishment damage: {0}" },
             }, this);
         }
         #endregion
 
-        #region Config       
-        private Configuration config;
-        private class Configuration
+        #region Config     
+        
+        private ConfigurationFile Configuration;
+
+        private class ConfigurationFile
         {    
             [JsonProperty(PropertyName = "Percentage of damage to punish")]
-            public int percentagePunish = 50;
+            public int PercentagePunish = 50;
             [JsonProperty(PropertyName = "Only punish damage on players with permission")]
-            public bool onlyPunishPermission = false;
+            public bool OnlyPunishPermission = false;
             [JsonProperty(PropertyName = "Give damage permission")]
-            public string givePermission = "punishff.give";
-            [JsonProperty(PropertyName = "Debug")]
-            public bool Debug = false;
+            public string GivePermission = "punishff.give";
         }
+
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file");
-            config = new Configuration();
+            Configuration = new ConfigurationFile();
         }
+
         protected override void LoadConfig()
         {
             base.LoadConfig();
-            config = Config.ReadObject<Configuration>();
+            Configuration = Config.ReadObject<ConfigurationFile>();
             SaveConfig();
         }
-        protected override void SaveConfig() => Config.WriteObject(config);
+
+        protected override void SaveConfig() => Config.WriteObject(Configuration);
+
         #endregion
 
         #region Hooks
+
         private void Init()
         {
-            permission.RegisterPermission(config.givePermission, this);
+            permission.RegisterPermission(Configuration.GivePermission, this);
         }
+
         private void OnFriendAttacked(IPlayer attacker, IPlayer victim, HitInfo info)
         {
-            float amount = info.damageTypes.Get(info.damageTypes.GetMajorityDamageType());
-            float scale = config.percentagePunish / 100;
-            float dmgAmount = amount * scale;
-            if (!config.onlyPunishPermission)
+            //So damage is correct (armor values etc applied)
+            NextTick(() =>
             {
-                attacker.Hurt(dmgAmount);
-                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, dmgAmount.ToString()));
-                if (config.Debug) Puts("Amount: " + amount);
-                if (config.Debug) Puts("Scale: " + scale);
-                return;
-            }
-            else
-            {
-                if (!HasPermission(victim))
-                    return;
-                attacker.Hurt(dmgAmount);
-                attacker.Reply(GetMessage("PunishFriendlyFire", attacker, dmgAmount.ToString()));
-                if (config.Debug) Puts("Amount: " + amount);
-                if (config.Debug) Puts("Scale: " + scale);
-                return;
-            }
+                if (attacker == null || victim == null || info == null) return;
+
+                float amount = info.damageTypes.Total();
+                float scale = Configuration.PercentagePunish / 100;
+                float dmgAmount = amount * scale;
+                if (!Configuration.OnlyPunishPermission)
+                {
+                    attacker.Hurt(dmgAmount);
+                    attacker.Reply(GetMessage("PunishFriendlyFire", attacker, dmgAmount.ToString()));
+                }
+                else
+                {
+                    if (!HasPermission(victim)) return;
+                    attacker.Hurt(dmgAmount);
+                    attacker.Reply(GetMessage("PunishFriendlyFire", attacker, dmgAmount.ToString()));
+                }
+            });
         }
+
         #endregion
 
         #region Helpers
-        string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
-        bool HasPermission(IPlayer player) => permission.UserHasPermission(player.Id, config.givePermission);
+
+        private string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
+
+        private bool HasPermission(IPlayer player) => permission.UserHasPermission(player.Id, Configuration.GivePermission);
+
         #endregion
     }
 }

@@ -107,23 +107,24 @@ namespace Oxide.Plugins
         }
         private void OnServerInitialized()
         {
-            foreach (var player in BasePlayer.activePlayerList)
-                CreatePlayerSettings(player.IPlayer);
+            foreach (var player in BasePlayer.activePlayerList) CreatePlayerSettings(player.IPlayer);
             SaveData();
         }
-        object OnPlayerAttack(BasePlayer player, HitInfo info)
+        private object OnPlayerAttack(BasePlayer player, HitInfo info)
         {
-            if (info?.HitEntity == null || player == null)
-                return null;
+            if (info?.HitEntity == null || player == null) return null;
+
             IPlayer attacker = player.IPlayer;
-            if (!(info.HitEntity is BasePlayer))
-                return null;
+            if (!(info.HitEntity is BasePlayer)) return null;
+
             BasePlayer victimBP = info.HitEntity as BasePlayer;
             IPlayer victim = victimBP.IPlayer;
-            if (attacker == null || victim == null || attacker.Id == victim.Id)
-                return null;
+
+            if (attacker == null || victim == null || attacker.Id == victim.Id) return null;
+
             CreatePlayerSettings(attacker);
             CreatePlayerSettings(victim);
+
             if (!allPlayerSettings[attacker.Id].ff || !allPlayerSettings[victim.Id].ff)
             {
                 if ((config.isTeamMemberCheck && IsTeamMember(player, victimBP)) || (config.isFriendCheck && (Friends?.Call<bool>("AreFriends", attacker.Id, victim.Id) ?? false)) || (config.isClanMemberCheck && IsClanMember(player, victimBP)))
