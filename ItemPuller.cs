@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Item Puller", "collect_vood", "1.2.3")]
+    [Info("Item Puller", "collect_vood", "1.2.4")]
     [Description("Gives you the ability to pull items from containers")]
     class ItemPuller : CovalencePlugin
     {
@@ -222,7 +222,7 @@ namespace Oxide.Plugins
             if (uiEnabled.Contains(player))
                 uiEnabled.Remove(player);
         }
-        private void OnPlayerInit(BasePlayer player) { CreatePlayerSettings(player); }
+        private void OnPlayerConnected(BasePlayer player) { CreatePlayerSettings(player); }
         #endregion
 
         #region Commands
