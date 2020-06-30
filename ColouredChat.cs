@@ -8,6 +8,7 @@ using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using ConVar;
 using UnityEngine;
+using CompanionServer;
 
 namespace Oxide.Plugins
 {
@@ -542,7 +543,7 @@ namespace Oxide.Plugins
                 {
                     ply.SendConsoleCommand("chat.add2", (int)colouredChatMessage.ChatChannel, player.userID, colouredChatMessage.Message, colouredChatMessage.Name, colouredChatMessage.Colour);
                 }
-                DebugEx.Log(string.Concat("[LIMITED CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
+                DebugEx.Log(string.Concat("[PRIVATE CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
             }
             else if (colouredChatMessage.ChatChannel == Chat.ChatChannel.Global)
             {
@@ -552,10 +553,13 @@ namespace Oxide.Plugins
             else if (colouredChatMessage.ChatChannel == Chat.ChatChannel.Team)
             {
                 if (player?.Team == null) return;
+
+                player.Team.BroadcastTeamChat(player.userID, player.displayName, colouredChatMessage.Message, colouredChatMessage.Colour);
                 foreach (ulong memberId in player.Team.members)
                 {
                     BasePlayer member;
-                    if ((member = RelationshipManager.FindByID(memberId)) != null) receivers.Add(member);
+                    if ((member = RelationshipManager.FindByID(memberId)) != null) 
+                        receivers.Add(member);
                 }
                 DebugEx.Log(string.Concat("[TEAM CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
             }
@@ -1041,36 +1045,6 @@ namespace Oxide.Plugins
             return formattedMessage;
         }
 
-        private string API_GetNameColourHex(IPlayer iPlayer)
-        {
-            string colour = iPlayer.IsAdmin ? "#af5" : "#5af";
-            string colourNonModified = colour;
-
-            var playerData = new PlayerData();
-            if (allColourData.ContainsKey(iPlayer.Id)) playerData = allColourData[iPlayer.Id];
-
-            if (!string.IsNullOrEmpty(playerData.NameColour)) colour = playerData.NameColour;
-
-            string userPrimaryGroup = cachedData[iPlayer.Id].PrimaryGroup;
-            if (allColourData.ContainsKey(userPrimaryGroup))
-            {
-                var groupData = allColourData[userPrimaryGroup];
-                if (colour == colourNonModified)
-                {
-                    if (!string.IsNullOrEmpty(groupData.NameColour)) colour = groupData.NameColour;
-                }
-            }
-
-            if (BetterChatIns())
-            {
-                Dictionary<string, object> betterChatMessageData = BetterChat.CallHook("API_GetMessageData", iPlayer, "Temp") as Dictionary<string, object>;
-
-                colour = ((Dictionary<string, object>)betterChatMessageData["UsernameSettings"])["Color"] as string;            
-            }
-
-            return colour;
-        }
-
         public class ColouredChatMessage
         {
             public IPlayer Player;
@@ -1116,7 +1090,7 @@ namespace Oxide.Plugins
             
             public string GetChatOutput()
             {
-                return string.Format(ChatFormat, Name, Message);
+                return string.Format(ChatFormat, $"<color={Colour}>{Name}</color>", Message);
             }
         }
         

@@ -130,7 +130,7 @@ namespace Oxide.Plugins
                 int.TryParse(args[2], out delay);
             }            
             
-            int duration = 0;
+            int duration = 7;
             if (args.Length >= 4)
             {
                 int.TryParse(args[3], out duration);
@@ -153,7 +153,12 @@ namespace Oxide.Plugins
                 yield return CachedWaitForOneSecond;
             }
 
-            var winner = GetRandomBasePlayer(forGroup);
+            for (int i = 0; i < 100; i++)
+            {
+                var winner = GetRandomBasePlayer(forGroup);
+                if (winner != null && !permission.UserHasGroup(winner.UserIDString, receiveGroup)) break;
+            }
+            
             if (winner == null)
             {
                 server.Broadcast(GetMessage("NoWinnerFound", giveawayer));
