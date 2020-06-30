@@ -12,7 +12,7 @@ using CompanionServer;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.6")]
+    [Info("Coloured Chat", "collect_vood", "2.2.7")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -37,6 +37,7 @@ namespace Oxide.Plugins
                 { "NoPermissionSetOthers", "You don't have permission to set other players {0} colours." },
                 { "NoPermissionGradient", "You don't have permission to use {0} gradients." },
                 { "NoPermissionRandom", "You don't have permission to use random {0} colours." },
+                { "NoPermissionRainbow", "You don't have permission to use the rainbow colours." },
                 { "IncorrectGradientUsage", "Incorrect usage! To use gradients please use /{0} gradient hexCode1 hexCode2 ...</color>" },
                 { "IncorrectGradientUsageArgs", "Incorrect usage! A gradient requires at least two different valid colours!"},
                 { "GradientChanged", "{0} gradient changed to {1}!"},
@@ -52,7 +53,9 @@ namespace Oxide.Plugins
                 { "ColoursInfo", "You can only use hexcodes, eg '<color=#ffff94>#ffff94</color>'\nTo remove your colour, use 'clear', 'reset' or 'remove'\n\nAvailable Commands: {0}\n\n{1}"},
                 { "InvalidColour", "That colour is not valid. Do /colours for more information on valid colours." },
                 { "RndColour", "{0} colour was randomized to <color={1}>{1}</color>" },
-                { "RndColourFor", "{0} colour of {1} randomized to {2}."},
+                { "RndColourFor", "{0} colour of {1} randomized to <color={2}>{2}</color>."},
+                { "RainbowColour", "{0} colour was set to rainbow." },
+                { "RainbowColourFor", "{0} colour of {1} set to rainbow."},
                 { "IncorrectGroupUsage", "Incorrect group usage! /{0} group <groupName> <colourOrColourArgument>\nFor a list of colours do /colours" },
             }, this);
         }
@@ -462,7 +465,7 @@ namespace Oxide.Plugins
         //Name
         private bool HasNameShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermShow));
         private bool HasNamePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermUse));
-        private bool HasNameRainbow(IPlayer player) => (permission.UserHasPermission(player.Id, config.namePermRainbow));
+        private bool HasNameRainbow(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermRainbow));
         private bool CanNameGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermGradient));
         private bool CanNameBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermBypass));
         private bool CanNameSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermSetOthers));
@@ -471,7 +474,7 @@ namespace Oxide.Plugins
         //Message
         private bool HasMessageShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermShow));
         private bool HasMessagePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermUse));
-        private bool HasMessageRainbow(IPlayer player) => (permission.UserHasPermission(player.Id, config.messagePermRainbow));
+        private bool HasMessageRainbow(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermRainbow));
         private bool CanMessageGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermGradient));
         private bool CanMessageBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermBypass));
         private bool CanMessageSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermSetOthers));
@@ -660,7 +663,6 @@ namespace Oxide.Plugins
                                                                       $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
                 if (player.IsAdmin) availableCommands += $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>" +
                                                          $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
-                if (HasMessageRainbow(player)) availableCommands += $"\n\nBy default rainbow message colour: {ProcessGradient("Rainbow", config.rainbowColours)}";
             }
             else
             {
@@ -672,7 +674,6 @@ namespace Oxide.Plugins
                                                                       $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
                 if (player.IsAdmin) availableCommands += $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>" +
                                                          $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
-                if (HasNameRainbow(player)) availableCommands += $"\n\nBy default rainbow name colour: {ProcessGradient(player.Name, config.rainbowColours)}";
             }
 
             string additionalInfo = string.Empty;
@@ -819,6 +820,22 @@ namespace Oxide.Plugins
                 if (isCalledOnto) player.Reply(GetMessage("RndColourFor", player, isMessage ? "Message" : "Name", target.Name, colLower));
                 return;
             }
+            if (colLower == "rainbow")
+            {
+                if (isMessage && !HasMessageRainbow(player) || !HasNameRainbow(player))
+                {
+                    player.Reply(GetMessage("NoPermissionRainbow", player));
+                    return;
+                }
+
+                if (isMessage) ChangeMessageColour(key, string.Empty, config.rainbowColours);
+                else ChangeNameColour(key, string.Empty, config.rainbowColours);
+                if (isGroup) ClearCache();
+
+                if (target.IsConnected) target.Reply(GetMessage("RainbowColour", target, GetCorrectLang(isGroup, isMessage, key)));
+                if (isCalledOnto) player.Reply(GetMessage("RainbowColourFor", player, isMessage ? "Message" : "Name", target.Name));
+                return;
+            }
             string invalidChar;
             if ((invalidChar = IsInvalidCharacter(colLower)) != null)
             {
@@ -953,23 +970,29 @@ namespace Oxide.Plugins
 
         private ColouredChatMessage FromMessage(IPlayer player, Chat.ChatChannel channel, string message)
         {
+            var playerData = new PlayerData();
+            if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
+            var colouredNameData = GetColouredName(player, playerData);
+                  
+            colouredNameData.ChatChannel = channel;
+            colouredNameData.Message = GetColouredMessage(player, playerData, message);
+            return colouredNameData;
+        }
+
+        private ColouredChatMessage GetColouredName(IPlayer player, PlayerData playerData)
+        {
             string playerUserName = player.Name;
             string playerColour = player.IsAdmin ? "#af5" : "#5af";
             string playerColourNonModified = playerColour;
-            string playerMessage = message;
 
-            var playerData = new PlayerData();
-            if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
-
-            //Caching
             if (!cachedData.ContainsKey(player.Id))
             {
                 string gradientName = string.Empty;
-                if (playerData?.NameGradientArgs != null) gradientName = ProcessGradient(player.Name, playerData.NameGradientArgs, false, player);
-                else if (HasNameRainbow(player) && string.IsNullOrEmpty(playerData?.NameColour)) gradientName = ProcessGradient(player.Name, config.rainbowColours, false, player);
+                if (playerData?.NameGradientArgs != null) 
+                    gradientName = ProcessGradient(player.Name, playerData.NameGradientArgs, false, player);
+
                 cachedData.Add(player.Id, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.Id)));
             }
-            if (HasMessageRainbow(player) && string.IsNullOrEmpty(playerData?.MessageColour)) playerMessage = ProcessGradient(message, config.rainbowColours, true, player);
 
             if (HasNameShowPerm(player))
             {
@@ -977,12 +1000,8 @@ namespace Oxide.Plugins
                 if (playerData?.NameGradientArgs != null) playerUserName = cachedData[player.Id].NameColourGradient;
                 else if (!string.IsNullOrEmpty(playerData?.NameColour)) playerColour = playerData.NameColour;
                 else if (playerUserName == player.Name && !string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient)) playerUserName = cachedData[player.Id].NameColourGradient;
-
-                if (playerData?.MessageGradientArgs != null) playerMessage = ProcessGradient(message, playerData.MessageGradientArgs, true, player);
-                else if (!string.IsNullOrEmpty(playerData?.MessageColour)) playerMessage = ProcessColourMessage(message, playerData.MessageColour);
             }
 
-            //Group Handling
             string userPrimaryGroup = cachedData[player.Id].PrimaryGroup;
             if (allColourData.ContainsKey(userPrimaryGroup))
             {
@@ -994,15 +1013,38 @@ namespace Oxide.Plugins
                             cachedData[player.Id].NameColourGradient;
                     else if (!string.IsNullOrEmpty(groupData?.NameColour)) playerColour = groupData.NameColour;
                 }
+            }
+
+            return new ColouredChatMessage() { Player = player, Name = playerUserName, Colour = (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour };
+        }
+
+        private string GetColouredMessage(IPlayer player, PlayerData playerData, string message)
+        {
+            string playerMessage = message;
+
+            if (HasNameShowPerm(player))
+            {
+                if (playerData?.MessageGradientArgs != null) 
+                    playerMessage = ProcessGradient(message, playerData.MessageGradientArgs, true, player);
+                else if (!string.IsNullOrEmpty(playerData?.MessageColour)) 
+                    playerMessage = ProcessColourMessage(message, playerData.MessageColour);
+            }
+
+            //Group Handling
+            string userPrimaryGroup = cachedData[player.Id].PrimaryGroup;
+            if (allColourData.ContainsKey(userPrimaryGroup))
+            {
+                var groupData = allColourData[userPrimaryGroup];
                 if (playerMessage == message)
                 {
-                    if (groupData?.MessageGradientArgs != null) playerMessage = ProcessGradient(message, groupData.MessageGradientArgs, true, player);
-                    else if (!string.IsNullOrEmpty(groupData?.MessageColour)) playerMessage = ProcessColourMessage(message, groupData.MessageColour);
+                    if (groupData?.MessageGradientArgs != null) 
+                        playerMessage = ProcessGradient(message, groupData.MessageGradientArgs, true, player);
+                    else if (!string.IsNullOrEmpty(groupData?.MessageColour)) 
+                        playerMessage = ProcessColourMessage(message, groupData.MessageColour);
                 }
             }
 
-            return new ColouredChatMessage(player, channel, playerUserName, 
-                (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour, playerMessage);
+            return playerMessage;
         }
 
         private bool IsInHexRange(string hexCode,string rangeHexCode1, string rangeHexCode2)
@@ -1024,6 +1066,26 @@ namespace Oxide.Plugins
         #endregion
 
         #region API
+
+        private string API_GetColouredName(IPlayer player)
+        {
+            var playerData = new PlayerData();
+            if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
+
+            var colouredData = GetColouredName(player, playerData);
+            if (!string.IsNullOrEmpty(colouredData.Colour))
+                return $"<color={colouredData.Colour}>{player.Name}</color>";
+
+            return colouredData.Name;
+        }
+
+        private string API_GetColouredMessage(IPlayer player, string message)
+        {
+            var playerData = new PlayerData();
+            if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
+
+            return GetColouredMessage(player, playerData, message);
+        }
 
         private string API_GetColouredChatMessage(IPlayer iPlayer, Chat.ChatChannel channel,
             string message)
