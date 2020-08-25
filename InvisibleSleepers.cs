@@ -1,15 +1,12 @@
-using Harmony;
 using Network;
 using Newtonsoft.Json;
 using Oxide.Core.Plugins;
 using System.Collections.Generic;
-using Network.Visibility;
 using UnityEngine;
-using UnityEngine.Assertions;
 
 namespace Oxide.Plugins
 {
-    [Info("Invisible Sleepers", "collect_vood", "1.0.10")]
+    [Info("Invisible Sleepers", "collect_vood", "1.0.11")]
     [Description("Makes all sleepers invisible")]
     public class InvisibleSleepers : RustPlugin
     {
@@ -188,63 +185,6 @@ namespace Oxide.Plugins
         private bool IsTeamMember(BasePlayer player, BasePlayer target) => RelationshipManager.Instance.FindTeam(player.currentTeam)?.members.Contains(target.userID) ?? false;
 
         private bool IsFriend(BasePlayer player, BasePlayer target) => Friends?.Call<bool>("AreFriendsS", player.UserIDString, target.UserIDString) ?? false;
-
-        #endregion
-
-        #region Patch
-
-        [HarmonyPatch(typeof(Networkable))]
-        [HarmonyPatch(nameof(Networkable.SwitchGroup))]
-        private static class SwitchGroupPatch
-        {
-            public static bool Prefix(Networkable __instance, Group newGroup)
-            {
-                if (newGroup == null || newGroup.ID != 1 || __instance.connection == null)
-                {
-                    return true;
-                }
-
-                BasePlayer target = __instance.connection.player as BasePlayer;
-                if (target == null || target.IsDead())
-                {
-                    return true;
-                }
-
-                UpdateNetworkGroup(target);
-                return false;
-            }
-
-            private static void UpdateNetworkGroup(BaseNetworkable baseNetworkable)
-            {
-                Assert.IsTrue(baseNetworkable.isServer, "UpdateNetworkGroup called on clientside entity!");
-                if (baseNetworkable.net == null)
-                {
-                    return;
-                }
-
-                if (baseNetworkable.net.UpdateGroups(baseNetworkable.transform.position))
-                {
-                    SendNetworkGroupChange(baseNetworkable);
-                }
-            }
-
-            private static void SendNetworkGroupChange(BaseNetworkable baseNetworkable)
-            {
-                if (!baseNetworkable.isSpawned || !Net.sv.IsConnected())
-                    return;
-                if (baseNetworkable.net.group == null)
-                {
-                    return;
-                }
-
-                if (!Net.sv.write.Start())
-                    return;
-                Net.sv.write.PacketID(Message.Type.GroupChange);
-                Net.sv.write.EntityID(baseNetworkable.net.ID);
-                Net.sv.write.GroupID(baseNetworkable.net.group.ID);
-                Net.sv.write.Send(new SendInfo(baseNetworkable.net.group.subscribers));
-            }
-        }
 
         #endregion
     }
