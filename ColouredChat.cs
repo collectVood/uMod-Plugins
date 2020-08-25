@@ -12,7 +12,7 @@ using CompanionServer;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.7")]
+    [Info("Coloured Chat", "collect_vood", "2.2.8")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {

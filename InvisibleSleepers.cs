@@ -9,7 +9,7 @@ using UnityEngine.Assertions;
 
 namespace Oxide.Plugins
 {
-    [Info("Invisible Sleepers", "collect_vood", "1.0.9")]
+    [Info("Invisible Sleepers", "collect_vood", "1.0.10")]
     [Description("Makes all sleepers invisible")]
     public class InvisibleSleepers : RustPlugin
     {
@@ -134,7 +134,7 @@ namespace Oxide.Plugins
                 Net.sv.write.Send(new SendInfo(connections));
             }
 
-            player.UpdatePlayerCollider(false);
+            player.DisablePlayerCollider();
         }
 
         //Credit: birthdates for .limitNetworking possibly fixing some lag issues
@@ -154,7 +154,7 @@ namespace Oxide.Plugins
             if (player != null) 
             {
                 player.limitNetworking = false;
-                player.UpdatePlayerCollider(true);
+                player.EnablePlayerCollider();
             }
         }
 

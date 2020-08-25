@@ -157,6 +157,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Hooks
+
         private void Init()
         {
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
@@ -170,6 +171,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permForcePull, this);
             permission.RegisterPermission(permBuildPull, this);
         }
+
         private void Loaded()
         {
             if (config.checkForFriends && (!Friends || !Friends.IsLoaded))
@@ -177,7 +179,8 @@ namespace Oxide.Plugins
             if (config.checkForClans && (!Clans || !Clans.IsLoaded))
                 PrintWarning("You are missing the Clans plugin(check for Clans won't work)");
         }
-        object OnMessagePlayer(string message, BasePlayer player)
+
+        private object OnMessagePlayer(string message, BasePlayer player)
         {
             if (player == null)
                 return null;
@@ -185,7 +188,8 @@ namespace Oxide.Plugins
                 return true;
             return null;
         }
-        object CanCraft(ItemCrafter itemCrafter, ItemBlueprint bp, int amount)
+
+        private object CanCraft(ItemCrafter itemCrafter, ItemBlueprint bp, int amount)
         {
             var player = itemCrafter.GetComponent<BasePlayer>();
             if (player == null)
@@ -201,7 +205,8 @@ namespace Oxide.Plugins
 
             return status;
         }
-        object CanAffordToPlace(BasePlayer player, Planner planner, Construction construction)
+
+        private object CanAffordToPlace(BasePlayer player, Planner planner, Construction construction)
         {
             if (!config.pullOnBuild || !allPlayerSettings[player.userID].enabled)
                 return null;
@@ -217,16 +222,19 @@ namespace Oxide.Plugins
 
             return status;
         }
-        void OnPlayerDisconnected(BasePlayer player, string reason)
+
+        private void OnPlayerDisconnected(BasePlayer player, string reason)
         {
             if (uiEnabled.Contains(player))
                 uiEnabled.Remove(player);
         }
+
         private void OnPlayerConnected(BasePlayer player) { CreatePlayerSettings(player); }
+
         #endregion
 
         #region Commands
-        void ItemPullerChatCommand(IPlayer player, string cmd, string[] args)
+        private void ItemPullerChatCommand(IPlayer player, string cmd, string[] args)
         {
             BasePlayer bPlayer;
             if ((bPlayer = player.Object as BasePlayer) == null)
@@ -269,13 +277,15 @@ namespace Oxide.Plugins
                 }
             }
         }
-        string GetOptionFormatted(bool option)
+
+        private string GetOptionFormatted(bool option)
         {
             if (option)
                 return "<color=#7FFF00>Activated</color>";
             else
                 return "<color=#ff0000>Disabled</color>";
         }
+
         #endregion
 
         #region UI
@@ -300,20 +310,23 @@ namespace Oxide.Plugins
             if (config.useUi)
                 DestroyUi(player);
         }
-        string ToggleButtonColor(bool Enabled)
+
+        private string ToggleButtonColor(bool Enabled)
         {
             string toggleButtonColor = !Enabled
                             ? "0.415 0.5 0.258 0.4"
                             : "0.8 0.254 0.254 0.4";
             return toggleButtonColor;
         }
-        string ToggleButtonTextColor(bool Enabled)
+
+        private string ToggleButtonTextColor(bool Enabled)
         {
             string toggleButtonTextColor = !Enabled
                                             ? "0.607 0.705 0.431"
                                             : "0.705 0.607 0.431";
             return toggleButtonTextColor;
         }
+
         private CuiElementContainer CreateUi(BasePlayer player, BaseEntity entity)
         {
             PlayerSettings settings = allPlayerSettings[player.userID];
@@ -524,17 +537,19 @@ namespace Oxide.Plugins
             DestroyUi(player);
             CreateUi(player, entity);
         }
+
         #endregion
 
         #region Helpers
-        class Results
+
+        private class Results
         {
             public bool hasResources = false;
             public Dictionary<Item, int> transferItems = new Dictionary<Item, int>();
             public int check = 0;
         }
 
-        Results ScanItems(BasePlayer player, List<ItemAmount> ingredients, int amount)
+        private Results ScanItems(BasePlayer player, List<ItemAmount> ingredients, int amount)
         {
             var results = new Results();
 
@@ -583,7 +598,8 @@ namespace Oxide.Plugins
             }
             return results;
         }
-        object GiveItems(BasePlayer player, Results results, List<ItemAmount> ingredients)
+
+        private object GiveItems(BasePlayer player, Results results, List<ItemAmount> ingredients)
         {
             if (results.hasResources)
                 return null;
@@ -609,6 +625,7 @@ namespace Oxide.Plugins
             }
             return null;
         }
+
         private void ForceUsableItem(ItemCrafter itemCrafter, int itemid, int required)
         {
             var player = itemCrafter.GetComponent<BasePlayer>();
@@ -616,7 +633,8 @@ namespace Oxide.Plugins
             if (item != null)
                 player.GiveItem(item);
         }
-        Dictionary<Item, int> GetUsableItems(BasePlayer player, int itemid, int required)
+
+        private Dictionary<Item, int> GetUsableItems(BasePlayer player, int itemid, int required)
         {
             var itemDef = ItemManager.FindItemDefinition(itemid);
             if (itemDef == null)
@@ -681,12 +699,14 @@ namespace Oxide.Plugins
             }
             return null;
         }
+
         private bool IsTeamMember(BasePlayer player, BasePlayer possibleMember)
         {
             if (player.currentTeam == 0 || possibleMember.currentTeam == 0)
                 return false;
             return player.currentTeam == possibleMember.currentTeam;
         }
+
         private bool IsFull(BasePlayer player)
         {
             if (player.inventory.containerMain.IsFull() && player.inventory.containerBelt.IsFull())
@@ -694,6 +714,7 @@ namespace Oxide.Plugins
             else
                 return false;
         }
+
         private bool HasIngredient(ItemCrafter itemCrafter, ItemAmount itemAmount, int amount)
         {
             int num = 0;
@@ -708,7 +729,8 @@ namespace Oxide.Plugins
             else
                 return true;
         }
-        object CheckPermissions(BasePlayer player, bool OnBuild = false)
+
+        private object CheckPermissions(BasePlayer player, bool OnBuild = false)
         {
             if (!IsInBuildingZone(player) && !allPlayerSettings[player.userID].fp)
             {
@@ -732,9 +754,13 @@ namespace Oxide.Plugins
             }
             return true;
         }
+
         private bool IsEnabled(BasePlayer player) { return allPlayerSettings[player.userID].enabled; }
+
         private bool IsAutocraft(BasePlayer player) { return allPlayerSettings[player.userID].autocraft; }
+
         private bool IsFromTC(BasePlayer player) { return allPlayerSettings[player.userID].fromTC; }
+
         private bool IsForcePulling(BasePlayer player) { return allPlayerSettings[player.userID].fp; }
 
         private void ChangeEnabled(BasePlayer player, string setting)
@@ -809,8 +835,11 @@ namespace Oxide.Plugins
         }
 
         private bool HasPerm(BasePlayer player, string perm) => (permission.UserHasPermission(player.UserIDString, perm));
+
         private bool IsInBuildingZone(BasePlayer player) => (player.IsBuildingAuthed());
+
         private bool CanForcePull(BasePlayer player) => (permission.UserHasPermission(player.UserIDString, permForcePull));
+
         #endregion
     }
 }
