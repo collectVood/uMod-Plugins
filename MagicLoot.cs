@@ -8,7 +8,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Magic Loot", "collect_vood", "1.0.0")]
+    [Info("Magic Loot", "collect_vood & Norn", "1.0.0")]
     [Description("Simple components multiplier and loot system")]
     public class MagicLoot : CovalencePlugin
     {
