@@ -8,7 +8,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Magic Loot", "collect_vood & Norn", "1.0.0")]
+    [Info("Magic Loot", "collect_vood & Norn", "1.0.1")]
     [Description("Simple components multiplier and loot system")]
     public class MagicLoot : CovalencePlugin
     {
@@ -280,6 +280,8 @@ namespace Oxide.Plugins
                 return;
             }
 
+            AddMissingContainers();
+
             Puts($"Loaded at x{_configuration.Settings.NonItemListMultiplier} vanilla rate" +
                 $" | Manual Item List at x{_configuration.Settings.ItemListMultiplier} rate [Extra Loot: {_configuration.ExtraLoot.Enabled}]");
 
@@ -336,6 +338,35 @@ namespace Oxide.Plugins
         #region Methods
 
         /// <summary>
+        /// Adds missing containers to the configuration file
+        /// </summary>
+        private void AddMissingContainers()
+        {
+            int count = 0;
+            foreach (var container in UnityEngine.Resources.FindObjectsOfTypeAll<LootContainer>())
+            {
+                if (!container.enabled)
+                {
+                    continue;
+                }
+
+                ContainerData containerData;
+                if (_configuration.ContainersData.TryGetValue(container.ShortPrefabName, out containerData))
+                {
+                    continue;
+                }
+
+                _configuration.ContainersData.Add(container.ShortPrefabName, containerData = new ContainerData());
+                count++;
+            }
+
+            if (count > 0)
+            {
+                Puts($"Added {count} missing containers to the config file.");
+            }
+        }
+
+        /// <summary>
         /// Repopulates all LootContainers
         /// </summary>
         private void RepopulateContainers()
@@ -343,11 +374,7 @@ namespace Oxide.Plugins
             int count = 0;
             foreach (var container in UnityEngine.Object.FindObjectsOfType<LootContainer>())
             {
-                ContainerData containerData;
-                if (!_configuration.ContainersData.TryGetValue(container.ShortPrefabName, out containerData))
-                {
-                    _configuration.ContainersData.Add(container.ShortPrefabName, containerData = new ContainerData());
-                }
+                var containerData = _configuration.ContainersData[container.ShortPrefabName];
 
                 if (IgnoreContainer(containerData))
                 {
