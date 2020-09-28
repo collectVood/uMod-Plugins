@@ -559,8 +559,6 @@ namespace Oxide.Plugins
         /// <param name="container"></param>
         private void AddRandomItem(LootContainer container, ContainerData containerData)
         {
-            //Errors if random rarity is enabled but only on extra loot
-
             if (containerData.Rarities.Count == 0)
             {
                 PrintWarning("Using Non-Vanilla-LootTables but no set Rarity found in list for container : " + container.ShortPrefabName);
@@ -608,7 +606,6 @@ namespace Oxide.Plugins
                 Pool.FreeList(ref duplicateItems);
             }
 
-            //TODO add skin stuff
             container.inventory.AddItem(randomItemData.ItemDefinition, UnityEngine.Random.Range(1, randomItemData.MaxStack));
         }
 
