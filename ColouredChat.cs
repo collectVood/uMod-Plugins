@@ -12,7 +12,7 @@ using CompanionServer;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.7")]
+    [Info("Coloured Chat", "collect_vood", "2.2.8")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
@@ -1067,10 +1067,26 @@ namespace Oxide.Plugins
 
         #region API
 
+        private string API_GetNameColourHex(IPlayer player)
+        {
+            var playerData = new PlayerData();
+            if (allColourData.ContainsKey(player.Id)) 
+                playerData = allColourData[player.Id];
+
+            var colouredData = GetColouredName(player, playerData);
+            if (string.IsNullOrEmpty(colouredData.Colour))
+            {
+                return player.IsAdmin ? "#af5" : "#5af";
+            }
+
+            return colouredData.Colour;
+        }
+
         private string API_GetColouredName(IPlayer player)
         {
             var playerData = new PlayerData();
-            if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
+            if (allColourData.ContainsKey(player.Id)) 
+                playerData = allColourData[player.Id];
 
             var colouredData = GetColouredName(player, playerData);
             if (!string.IsNullOrEmpty(colouredData.Colour))

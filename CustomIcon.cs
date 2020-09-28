@@ -29,7 +29,8 @@ namespace Oxide.Plugins
         protected override void SaveConfig() => Config.WriteObject(config);
         #endregion
 
-        #region Hooks        
+        #region Hooks 
+        
         private object OnBroadcastCommand(string command, object[] args)
         {
             if (args != null && config != null)
@@ -60,6 +61,7 @@ namespace Oxide.Plugins
             }
             return null;
         }
+
         #endregion
     }
 }
