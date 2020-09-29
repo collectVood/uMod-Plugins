@@ -8,7 +8,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Magic Loot", "collect_vood & Norn", "1.0.1")]
+    [Info("Magic Loot", "collect_vood & Norn", "1.0.2")]
     [Description("Simple components multiplier and loot system")]
     public class MagicLoot : CovalencePlugin
     {
@@ -70,7 +70,10 @@ namespace Oxide.Plugins
             public bool BlueprintDuplication = false;            
             
             [JsonProperty(PropertyName = "Random Workshop Skins")]
-            public bool RandomWorkshopSkins = false;
+            public bool RandomWorkshopSkins = false;            
+            
+            [JsonProperty(PropertyName = "Multiply Tea Buffs")]
+            public bool MultiplyTeaBuff = false;
         }
 
         public class ExtraLootFile
@@ -280,10 +283,15 @@ namespace Oxide.Plugins
                 return;
             }
 
+            if (!_configuration.Settings.MultiplyTeaBuff)
+            {
+                Unsubscribe(nameof(OnBonusItemDrop));
+            }
+
             AddMissingContainers();
 
             Puts($"Loaded at x{_configuration.Settings.NonItemListMultiplier} vanilla rate" +
-                $" | Manual Item List at x{_configuration.Settings.ItemListMultiplier} rate [Extra Loot: {_configuration.ExtraLoot.Enabled}]");
+                $" | Manual Item List at x{_configuration.Settings.ItemListMultiplier} rate [Extra Loot: {_configuration.ExtraLoot.Enabled}, Multiplying Tea Buffs: {_configuration.Settings.MultiplyTeaBuff}]");
 
             RepopulateContainers();            
         }
@@ -316,6 +324,16 @@ namespace Oxide.Plugins
             }
 
             return container;
+        }
+
+        private object OnBonusItemDrop(Item item, BasePlayer player)
+        {
+            if (!ReinforceRules(item, null))
+            {
+                return false;
+            }
+
+            return null;
         }
 
         private void Unload()
@@ -415,7 +433,7 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
-        /// Removes duplicate blueprints, items or blacklisted items and applies multipliers
+        /// Removes blacklisted items, applies item skins and applies multipliers
         /// </summary>
         /// <param name="container"></param>
         private void ReinforceRules(LootContainer container, ContainerData containerData)
@@ -424,52 +442,72 @@ namespace Oxide.Plugins
             {
                 var item = container.inventory.itemList[i];
 
-                if (_configuration.BlacklistedItems.Contains(item.info.shortname))
+                if (!ReinforceRules(item, containerData))
                 {
                     item.RemoveFromContainer();
                     i--;
-                    continue;
-                }
-
-                if (!_configuration.Settings.BlueprintDuplication && item.IsBlueprint()) 
-                {
-                    continue;
-                }
-
-                if (_configuration.Settings.RandomWorkshopSkins)
-                {
-                    item.skin = GetRandomSkin(item.info);
-                    if (item.skin != 0)
-                    {
-                        var heldEntity = item.GetHeldEntity();
-                        if (heldEntity != null)
-                        {
-                            heldEntity.skinID = item.skin;                            
-                        }                        
-                    }                       
-                }
-
-                float multiplier = 1f;
-                var inItemList = _configuration.ManualItemMultipliers.TryGetValue(
-                    item.info.shortname, out multiplier);
-
-                if (!inItemList)
-                {
-                    multiplier = 1f;
-                }
-
-                //Do not multiply
-                if (multiplier == 0f)
-                {
-                    continue;
-                }
-
-                multiplier *= containerData.Multiplier * (inItemList ? _configuration.Settings.ItemListMultiplier 
-                    : _configuration.Settings.NonItemListMultiplier);
-               
-                item.amount = _configuration.Settings.LimitToStacksizes ? (int)Math.Min(item.amount * multiplier, item.info.stackable) 
-                    : (int)(item.amount * multiplier);              
+                }                          
             }
+        }
+
+        /// <summary>
+        /// Removes blacklisted item, applies item skin and applies multipliers; Returns false if item is blacklisted/not allowed
+        /// </summary>
+        /// <param name="item"></param>
+        /// <param name="containerData"></param>
+        /// <returns>/// </returns>
+        private bool ReinforceRules(Item item, ContainerData containerData = null)
+        {
+            if (_configuration.BlacklistedItems.Contains(item.info.shortname))
+            {
+                return false;
+            }
+
+            if (!_configuration.Settings.BlueprintDuplication && item.IsBlueprint())
+            {
+                return true;
+            }
+
+            if (_configuration.Settings.RandomWorkshopSkins)
+            {
+                item.skin = GetRandomSkin(item.info);
+                if (item.skin != 0)
+                {
+                    var heldEntity = item.GetHeldEntity();
+                    if (heldEntity != null)
+                    {
+                        heldEntity.skinID = item.skin;
+                    }
+                }
+            }
+
+            float multiplier = 1f;
+            var inItemList = _configuration.ManualItemMultipliers.TryGetValue(
+                item.info.shortname, out multiplier);
+
+            if (!inItemList)
+            {
+                multiplier = 1f;
+            }
+
+            //Do not multiply
+            if (multiplier == 0f)
+            {
+                return true;
+            }
+
+            multiplier *= inItemList ? _configuration.Settings.ItemListMultiplier
+                : _configuration.Settings.NonItemListMultiplier;
+
+            if (containerData != null)
+            {
+                multiplier *= containerData.Multiplier;
+            }
+
+            item.amount = _configuration.Settings.LimitToStacksizes ? (int)Math.Min(item.amount * multiplier, item.info.stackable)
+                : (int)(item.amount * multiplier);
+
+            return true;
         }
 
         /// <summary>
