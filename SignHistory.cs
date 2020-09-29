@@ -7,10 +7,10 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-	[Info("SignHistory", "collect_vood", "1.1.1")]
+	[Info("SignHistory", "collect_vood", "1.1.2")]
 	[Description("Creates a changelog for signs")]
 
-	class SignHistory : CovalencePlugin
+	public class SignHistory : CovalencePlugin
 	{
         #region Constants
 
@@ -39,6 +39,7 @@ namespace Oxide.Plugins
 		#region Data
 
 		private StoredData storedData;
+
 		private Dictionary<uint, Sign> Signs => storedData.Signs;
 
 		private class StoredData
@@ -74,9 +75,14 @@ namespace Oxide.Plugins
 		}
 		
 
-		private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
-		private void Unload() => SaveData();
-		private void OnServerSave() => SaveData();
+		private void SaveData() 
+			=> Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
+		
+		private void Unload() 
+			=> SaveData();
+
+		private void OnServerSave()
+			=> SaveData();
 
 		#endregion
 
@@ -90,6 +96,7 @@ namespace Oxide.Plugins
 
 			SaveData();
 		}
+
 		private void OnNewSave(string filename)
 		{
 			PrintWarning("Map wipe detected! Resetting all sign data.");
@@ -97,26 +104,31 @@ namespace Oxide.Plugins
 			storedData.Signs = new Dictionary<uint, Sign>();
 			SaveData();
 		}
-		private void OnSignUpdated(Signage sign, BasePlayer player, string text) => LogSignChange(sign, player);
+
+		private void OnSignUpdated(BaseEntity sign, BasePlayer player)
+			=> LogSignChange(sign, player);
 
 		#endregion
 
 		#region Methods
 
-		private string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
+		private string GetMessage(string key, IPlayer player, params string[] args) 
+			=> String.Format(lang.GetMessage(key, this, player.Id), args);
 
-		private bool HasPerm(IPlayer player, string perm) => player.IsAdmin || permission.UserHasPermission(player.Id, perm);
+		private bool HasPerm(IPlayer player, string perm) 
+			=> player.IsAdmin || permission.UserHasPermission(player.Id, perm);
 
-		private void LogSignChange(Signage sign, BasePlayer player)
+		private void LogSignChange(BaseEntity sign, BasePlayer player)
 		{
-			if (sign == null || player == null) return;
+			if (sign == null || player == null) 
+				return;
 
 			var netId = sign.net.ID;
 
 			if (!Signs.ContainsKey(netId)) 
 			{
-				var owner = BasePlayer.FindByID(sign.OwnerID);
-				if (owner == null) return;
+				if (sign.OwnerID == 0) 
+					return;
 
 				Signs.Add(netId, new Sign(sign.OwnerID.ToString()));
 			}
@@ -147,8 +159,15 @@ namespace Oxide.Plugins
 			}
 
 			RaycastHit hit;
-			Signage sign;
-			if (!Physics.Raycast(bPlayer.eyes.HeadRay(), out hit, 4.0f) || (sign = hit.transform.GetComponentInParent<Signage>()) == null) 
+			BaseEntity sign;
+			if (!Physics.Raycast(bPlayer.eyes.HeadRay(), out hit, 4.0f) 
+				|| (sign = hit.GetEntity()) == null) 
+			{
+				player.Reply(GetMessage("NoSign", player));
+				return;
+			}
+
+			if (sign.Categorize() != "sign")
 			{
 				player.Reply(GetMessage("NoSign", player));
 				return;
@@ -167,7 +186,8 @@ namespace Oxide.Plugins
 			foreach (var change in signData.Changes)
 			{
 				var user = covalence.Players.FindPlayerById(change.Id);
-				if (user == null) continue;
+				if (user == null) 
+					continue;
 
 				changes += GetMessage("ChangePart", user, change.Timestamp.ToString(), user.Name, user.Id);
 			}
@@ -175,7 +195,10 @@ namespace Oxide.Plugins
 			string ownerString = signData.OwnerId;
 
 			var owner = covalence.Players.FindPlayerById(signData.OwnerId);
-			if (owner != null) ownerString = GetMessage("OwnerPart", owner, owner.Name, owner.Id);
+			if (owner != null)
+			{
+				ownerString = GetMessage("OwnerPart", owner, owner.Name, owner.Id);
+			}
 
 			player.Reply($"{GetMessage("Owner", player, ownerString)}\n" +
 				$"{GetMessage("Changes", player, changes)}");
