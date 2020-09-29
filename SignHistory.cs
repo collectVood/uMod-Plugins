@@ -74,7 +74,6 @@ namespace Oxide.Plugins
 			}
 		}
 		
-
 		private void SaveData() 
 			=> Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
 		
