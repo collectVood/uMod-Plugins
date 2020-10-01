@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using Facepunch;
 using Newtonsoft.Json;
 using Oxide.Core;
@@ -8,7 +7,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Magic Loot", "collect_vood & Norn", "1.0.2")]
+    [Info("Magic Loot", "collect_vood & Norn", "1.0.3")]
     [Description("Simple components multiplier and loot system")]
     public class MagicLoot : CovalencePlugin
     {
@@ -18,9 +17,13 @@ namespace Oxide.Plugins
 
         private readonly int _maxContainerSlots = 18;
 
-        private Dictionary<Rarity, List<ItemData>> _sortedRarities;
+        private int _scrapStack;
+
+        private Dictionary<Rarity, List<string>> _sortedRarities;
 
         private Dictionary<int, List<ulong>> _skinsCache = new Dictionary<int, List<ulong>>();
+
+        private Dictionary<LootSpawn, ItemAmountRanged[]> _originItemAmountRange = new Dictionary<LootSpawn, ItemAmountRanged[]>();
 
         #endregion
 
@@ -66,6 +69,9 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Limit Multipliers to Stacksizes")]
             public bool LimitToStacksizes = true;
 
+            [JsonProperty(PropertyName = "Limit Items Retries (Blacklist or Stacksize <= 0)")]
+            public int LimitItemRetries = 10;
+
             [JsonProperty(PropertyName = "Multiply Blueprints")]
             public bool BlueprintDuplication = false;            
             
@@ -73,7 +79,10 @@ namespace Oxide.Plugins
             public bool RandomWorkshopSkins = false;            
             
             [JsonProperty(PropertyName = "Multiply Tea Buffs")]
-            public bool MultiplyTeaBuff = false;
+            public bool MultiplyTeaBuff = false;            
+            
+            [JsonProperty(PropertyName = "Force Custom Loot Tables for Default Loot on all Containers")]
+            public bool ForceCustomLootTables = false;
         }
 
         public class ExtraLootFile
@@ -92,6 +101,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Prevent Duplicates Retries")]
             public int PreventDuplicatesRetries = 10;
+
+            [JsonProperty(PropertyName = "Force Custom Loot Tables for Extra Loot on all Containers")]
+            public bool ForceCustomLootTables = false;
         }
 
         public class ContainerData
@@ -115,7 +127,7 @@ namespace Oxide.Plugins
             public bool VanillaLootTablesExtra = true;
 
             [JsonProperty(PropertyName = "Utilize Random Rarity (depending on Items ALREADY in the container)")]
-            public bool RandomRarities = false;
+            public bool RandomRarities = true;
 
             [JsonProperty(PropertyName = "Rarity To Use (ONLY if 'Utilize Vanilla Loot Tables' is FALSE & 'Utilize Random Rarity' is FALSE | 0 = None, 1 = Common, 2 = Uncommon, 3 = Rare, 4 = Very Rare)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
             public List<Rarity> Rarities = new List<Rarity>() { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.VeryRare };
@@ -153,121 +165,61 @@ namespace Oxide.Plugins
 
         #region Data
 
-        private readonly string _raritiesPath = $"{nameof(MagicLoot)}/Rarities";
-
-        private bool LoadData()
+        private void LoadData()
         {
-            foreach (var container in _configuration.ContainersData)
+            _data = Interface.Oxide.DataFileSystem.ReadObject<DataFile>(Name);
+
+            int count = 0;
+            foreach (var item in ItemManager.itemList)
             {
-                if (!container.Value.VanillaLootTablesDefault 
-                    || !container.Value.VanillaLootTablesExtra)
+                if (_data.Items.ContainsKey(item.shortname))
                 {
-                    _sortedRarities = GetSortedRarities();
-                    break;
+                    continue;
                 }
+
+                _data.Items.Add(item.shortname, item.stackable);
+                count++;
             }
 
-            if (_sortedRarities == null)
+            SaveData();
+
+            if (count > 0)
             {
-                Puts("Skipping Custom Loot Tables & Custom Rarities (not used) ...");
-                return true;
+                Puts($"Added {count} new items to the item list!");
             }
 
-            string[] rarities = new string[] {};
-            
-            try
+            //Determine if rarity system is needed
+            if (_configuration.Settings.ForceCustomLootTables || _configuration.ExtraLoot.ForceCustomLootTables)
             {
-                int removedItemsCount = 0;
-                rarities = Interface.Oxide.DataFileSystem.GetFiles(_raritiesPath, "*");
-
-                foreach (var fileName in rarities)
+                _sortedRarities = GetSortedRarities();
+            }
+            else
+            {
+                foreach (var container in _configuration.ContainersData)
                 {
-                    string rarityName = Utility.GetFileNameWithoutExtension(fileName);
-
-                    Rarity rarity;
-                    if (!Enum.TryParse<Rarity>(rarityName, out rarity))
+                    if (!container.Value.VanillaLootTablesDefault
+                        || !container.Value.VanillaLootTablesExtra)
                     {
-                        PrintWarning($"The Rarity Naming has changed for : {rarityName}, please contact the developer!");
-                        continue;
+                        _sortedRarities = GetSortedRarities();
+                        break;
                     }
-
-                    var rarityItemData = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, ItemData>>(_raritiesPath + "/" + rarityName);
-                    var allItemData = _sortedRarities[rarity];
-
-                    for (int i = 0; i < allItemData.Count; i++)
-                    {
-                        var itemData = allItemData[i];
-
-                        ItemData savedItemData;
-                        if (!rarityItemData.TryGetValue(itemData.ItemDefinition.shortname, out savedItemData))
-                        {
-                            Puts("Adding new Item '" + itemData.ItemDefinition.shortname + "' to rarity list : " + rarity + "...");
-                            itemData.MaxStack = itemData.ItemDefinition.stackable;
-                            rarityItemData.Add(itemData.ItemDefinition.shortname, itemData);
-                            continue;
-                        }
-
-                        if (savedItemData.Spawn)
-                        {
-                            continue;
-                        }
-
-                        allItemData.RemoveAt(i);
-                        i--;
-                        removedItemsCount++;
-                    }
-
-                    Interface.Oxide.DataFileSystem.WriteObject<Dictionary<string, ItemData>>(_raritiesPath + "/" + rarityName, rarityItemData);
-
-                    Puts("Loaded Rarity '" + rarityName + "' with " + allItemData.Count + " items...");
-                }
-
-                Puts("Skipping " + removedItemsCount + " items for Custom Loot Table items...");
-
-                Puts("Loaded Rarities from : data/" + _raritiesPath);
-            }
-            catch (Exception e)
-            {
-                if (!(e is IOException))
-                {                  
-                    PrintError("Loading of Rarities failed! Resolve the conflict before the plugin can properly load!");
-                    PrintError(e.Message + " " + e.StackTrace);
-                    _initialized = false;
-                    return false;
-                }
-                
-                PrintWarning("Creating new Rarities in : data/" + _raritiesPath);
-
-                foreach (var rarity in _sortedRarities)
-                {
-                    var rarityFile = Interface.Oxide.DataFileSystem.GetFile(_raritiesPath + "/" + rarity.Key);
-
-                    var rarityItemData = new Dictionary<string, ItemData>();
-                    foreach (var itemData in rarity.Value)
-                    {
-                        itemData.MaxStack = itemData.ItemDefinition.stackable;
-                        rarityItemData.Add(itemData.ItemDefinition.shortname, itemData);
-                    }
-
-                    rarityFile.WriteObject<Dictionary<string, ItemData>>(rarityItemData);
-
-                    PrintWarning("Creating new Rarity : " + rarity.Key + " with " + rarityItemData.Count + " items...");
                 }
             }
 
-            return true;
+            _scrapStack = _data.Items["scrap"];
         }
 
-        public class ItemData
+        private void SaveData()
         {
-            [JsonProperty(PropertyName = "Should Spawn")]
-            public bool Spawn = true;
+            Interface.Oxide.DataFileSystem.WriteObject(Name, _data);
+        }
 
-            [JsonProperty(PropertyName = "Max Stack Spawn")]
-            public int MaxStack;
+        private DataFile _data;
 
-            [JsonIgnore]
-            public ItemDefinition ItemDefinition;
+        public class DataFile
+        {
+            [JsonProperty(PropertyName = "Item Data (Key: Item Shortname, Value: Stacksize)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public Dictionary<string, int> Items = new Dictionary<string, int>();
         }
 
         #endregion
@@ -278,22 +230,21 @@ namespace Oxide.Plugins
         {
             _initialized = true;
 
-            if (!LoadData())
-            {
-                return;
-            }
-
             if (!_configuration.Settings.MultiplyTeaBuff)
             {
                 Unsubscribe(nameof(OnBonusItemDrop));
             }
 
+            LoadData();
+
+            ModifyItemAmountRanges();
+
             AddMissingContainers();
 
             Puts($"Loaded at x{_configuration.Settings.NonItemListMultiplier} vanilla rate" +
-                $" | Manual Item List at x{_configuration.Settings.ItemListMultiplier} rate [Extra Loot: {_configuration.ExtraLoot.Enabled}, Multiplying Tea Buffs: {_configuration.Settings.MultiplyTeaBuff}]");
+                $" | Manual Item List at x{_configuration.Settings.ItemListMultiplier} rate [Extra Loot: {_configuration.ExtraLoot.Enabled}, Multiply Tea Buffs: {_configuration.Settings.MultiplyTeaBuff}]");
 
-            RepopulateContainers();            
+            RepopulateContainers(); 
         }
 
         private object OnLootSpawn(LootContainer container)
@@ -340,6 +291,8 @@ namespace Oxide.Plugins
         {
             _initialized = false;
 
+            RestoreItemAmountRanges();
+
             foreach (var container in UnityEngine.Object.FindObjectsOfType<LootContainer>())
             {
                 if (container?.inventory == null)
@@ -375,13 +328,14 @@ namespace Oxide.Plugins
                 }
 
                 _configuration.ContainersData.Add(container.ShortPrefabName, containerData = new ContainerData());
+
                 count++;
             }
 
             if (count > 0)
             {
                 Puts($"Added {count} missing containers to the config file.");
-            }
+            }            
         }
 
         /// <summary>
@@ -393,19 +347,18 @@ namespace Oxide.Plugins
             foreach (var container in UnityEngine.Object.FindObjectsOfType<LootContainer>())
             {
                 var containerData = _configuration.ContainersData[container.ShortPrefabName];
-
+                
                 if (IgnoreContainer(containerData))
                 {
                     continue;
                 }
 
                 container.inventory.Clear();
-                ItemManager.DoRemoves();
 
                 PopulateContainer(container, containerData);
                 count++;
             }
-
+           
             SaveConfig();
 
             Puts("Repopulated " + count.ToString() + " loot containers.");
@@ -420,15 +373,20 @@ namespace Oxide.Plugins
         {
             container.inventory.capacity = _maxContainerSlots;
 
-            AddDefaultLoot(container, containerData, !(containerData.Enabled && !containerData.VanillaLootTablesDefault));
+            AddDefaultLoot(container, containerData);
 
             AddExtraLoot(container, containerData);
+
+            ItemManager.DoRemoves();
 
             RandomizeDurability(container);
 
             //Generate scrap late so it is in the last slot
-            container.GenerateScrap();
-
+            if (_scrapStack > 0)
+            {
+                container.GenerateScrap();
+            }
+           
             ReinforceRules(container, containerData);
         }
 
@@ -445,9 +403,12 @@ namespace Oxide.Plugins
                 if (!ReinforceRules(item, containerData))
                 {
                     item.RemoveFromContainer();
+                    item.Remove(0f);
                     i--;
                 }                          
             }
+
+            ItemManager.DoRemoves();
         }
 
         /// <summary>
@@ -458,11 +419,6 @@ namespace Oxide.Plugins
         /// <returns>/// </returns>
         private bool ReinforceRules(Item item, ContainerData containerData = null)
         {
-            if (_configuration.BlacklistedItems.Contains(item.info.shortname))
-            {
-                return false;
-            }
-
             if (!_configuration.Settings.BlueprintDuplication && item.IsBlueprint())
             {
                 return true;
@@ -504,7 +460,12 @@ namespace Oxide.Plugins
                 multiplier *= containerData.Multiplier;
             }
 
-            item.amount = _configuration.Settings.LimitToStacksizes ? (int)Math.Min(item.amount * multiplier, item.info.stackable)
+            if (_data.Items[item.info.shortname] <= 0)
+            {
+                PrintWarning($"Item '{item.info.shortname}' spawned with 0 amount...");
+            }
+
+            item.amount = _configuration.Settings.LimitToStacksizes ? (int)Math.Min(item.amount * multiplier, _data.Items[item.info.shortname])
                 : (int)(item.amount * multiplier);
 
             return true;
@@ -529,25 +490,118 @@ namespace Oxide.Plugins
             }
         }
 
+        private bool IsValid(string itemShortname)
+        {
+            if (!_configuration.Settings.LimitToStacksizes)
+            {
+                return true;
+            }
+            else if (_configuration.BlacklistedItems.Contains(itemShortname))
+            {
+                return false;
+            }
+            else if (_data.Items[itemShortname] <= 0)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Validates all Loot Spawns found
+        /// </summary>
+        private void ModifyItemAmountRanges()
+        {
+            if (_configuration.Settings.ForceCustomLootTables && (_configuration.ExtraLoot.Enabled && _configuration.ExtraLoot.ForceCustomLootTables))
+            {
+                Puts("Skipping modifying default loot tables...");
+                return;
+            }
+
+            var lootSpawns = UnityEngine.Resources.FindObjectsOfTypeAll<LootSpawn>();
+            foreach (var lootSpawn in lootSpawns)
+            {
+                if (lootSpawn?.items == null)
+                {
+                    PrintDebug("Loot spawn data is null");
+                    continue;
+                }
+
+                ModifyItemAmountRange(lootSpawn);
+            }
+
+            Puts($"Modified '{_originItemAmountRange.Count}' loot data item ranges out of {lootSpawns.Length} ...");
+        }
+
+        /// <summary>
+        /// Validates given item amount ranged array and modifies/removes items if needed
+        /// </summary>
+        /// <param name="origin"></param>
+        private void ModifyItemAmountRange(LootSpawn origin)
+        {
+            var tempItemsToSpawn = Pool.GetList<ItemAmountRanged>();
+            for (int i = 0; i < origin.items.Length; i++)
+            {
+                var itemRangeToSpawn = origin.items[i];
+
+                if (!IsValid(itemRangeToSpawn.itemDef.shortname))
+                {                    
+                    continue;
+                }
+
+                tempItemsToSpawn.Add(itemRangeToSpawn);
+            }
+
+            if (tempItemsToSpawn.Count != origin.items.Length)
+            {
+                _originItemAmountRange.Add(origin, origin.items.Clone() as ItemAmountRanged[]);
+                origin.items = tempItemsToSpawn.ToArray();
+                PrintDebug($"Modified loot data of '{origin.name}'...");
+            }
+            
+            Pool.FreeList(ref tempItemsToSpawn);
+        }
+
+        /// <summary>
+        /// Resets all initially stored loot spawns to their default item ranges
+        /// </summary>
+        private void RestoreItemAmountRanges()
+        {
+            foreach (var lootSpawn in _originItemAmountRange)
+            {
+                lootSpawn.Key.items = lootSpawn.Value;
+            }
+
+            Puts($"Restored '{_originItemAmountRange.Count}' loot data item ranges to default...");
+        }
+
         /// <summary>
         /// Adds default loot to the container
         /// </summary>
         /// <param name="container"></param>
         /// <param name="containerData"></param>
-        private void AddDefaultLoot(LootContainer container, ContainerData containerData, bool useDefaultLootTables = true)
+        private void AddDefaultLoot(LootContainer container, ContainerData containerData)
         {
+            var useDefaultLootTables = !(containerData.Enabled && !containerData.VanillaLootTablesDefault);
+            if (useDefaultLootTables)
+            {
+                useDefaultLootTables = !_configuration.Settings.ForceCustomLootTables;
+            }
+
             if (container.LootSpawnSlots.Length != 0)
             {
                 for (int i = 0; i < container.LootSpawnSlots.Length; i++)
                 {
                     var lootSpawnSlot = container.LootSpawnSlots[i];
+
                     for (int j = 0; j < lootSpawnSlot.numberToSpawn; j++)
                     {
                         if (UnityEngine.Random.Range(0f, 1f) <= lootSpawnSlot.probability)
                         {
                             if (useDefaultLootTables)
-                            {
-                                lootSpawnSlot.definition.SpawnIntoContainer(container.inventory);
+                            {                               
+                                lootSpawnSlot.definition.SpawnIntoContainer(container.inventory);                               
                                 continue;
                             }
 
@@ -577,6 +631,12 @@ namespace Oxide.Plugins
         /// <param name="container"></param>
         private void AddExtraLoot(LootContainer container, ContainerData containerData)
         {
+            var useDefaultLootTables = !(containerData.Enabled && !containerData.VanillaLootTablesExtra);
+            if (useDefaultLootTables)
+            {
+                useDefaultLootTables = !_configuration.ExtraLoot.ForceCustomLootTables;
+            }
+
             var additionalItemsMin = 0;
             var additionalItemsMax = 0;
 
@@ -595,7 +655,7 @@ namespace Oxide.Plugins
             var additionalItems = UnityEngine.Random.Range(additionalItemsMin, additionalItemsMax + 1);
             for (int i = 0; i < additionalItems; i++)
             {
-                if (containerData.VanillaLootTablesExtra)
+                if (useDefaultLootTables)
                 {
                     AddRandomVanillaItem(container);
                 }
@@ -642,7 +702,8 @@ namespace Oxide.Plugins
             }
             
             var rarities = _sortedRarities[randomContainerRarity];
-            var randomItemData = rarities[UnityEngine.Random.Range(0, rarities.Count)];
+            var randomItemShortname = rarities[UnityEngine.Random.Range(0, rarities.Count)];
+            var randomItem = ItemManager.itemDictionaryByName[randomItemShortname];
 
             if (_configuration.ExtraLoot.PreventDuplicates)
             {
@@ -650,11 +711,13 @@ namespace Oxide.Plugins
 
                 for (int i = 0; i < _configuration.ExtraLoot.PreventDuplicatesRetries; i++)
                 {
-                    FindDuplicates(randomItemData.ItemDefinition.itemid, container.inventory.itemList, ref duplicateItems);
+                    FindDuplicates(randomItem.itemid, container.inventory.itemList, ref duplicateItems);
 
                     if (duplicateItems.Count > 0)
-                    {                       
-                        randomItemData = rarities[UnityEngine.Random.Range(0, rarities.Count)];
+                    {
+                        randomItemShortname = rarities[UnityEngine.Random.Range(0, rarities.Count)];
+                        randomItem = ItemManager.itemDictionaryByName[randomItemShortname];
+                        
                         duplicateItems.Clear();
 
                         if (i >= _configuration.ExtraLoot.PreventDuplicatesRetries - 1)
@@ -671,7 +734,11 @@ namespace Oxide.Plugins
                 Pool.FreeList(ref duplicateItems);
             }
 
-            container.inventory.AddItem(randomItemData.ItemDefinition, UnityEngine.Random.Range(1, randomItemData.MaxStack));
+            var maxAmount = _data.Items[randomItemShortname];
+            if (maxAmount > 0)
+            {
+                container.inventory.AddItem(randomItem, UnityEngine.Random.Range(1, maxAmount));
+            }
         }
 
         /// <summary>
@@ -698,9 +765,9 @@ namespace Oxide.Plugins
         /// Generates a Rarity Dictionary containing only Item Definitions that are not Blacklisted
         /// </summary>
         /// <returns></returns>
-        private Dictionary<Rarity, List<ItemData>> GetSortedRarities()
+        private Dictionary<Rarity, List<string>> GetSortedRarities()
         {
-            var sortedRarities = new Dictionary<Rarity, List<ItemData>>();
+            var sortedRarities = new Dictionary<Rarity, List<string>>();
 
             foreach (var itemDef in ItemManager.itemList)
             {
@@ -709,14 +776,21 @@ namespace Oxide.Plugins
                     continue;
                 }
 
-                if (!sortedRarities.ContainsKey(itemDef.rarity))
+                if (_data.Items[itemDef.shortname] <= 0)
                 {
-                    sortedRarities.Add(itemDef.rarity, new List<ItemData>() { new ItemData() { ItemDefinition = itemDef } });
                     continue;
                 }
 
-                sortedRarities[itemDef.rarity].Add(new ItemData() { ItemDefinition = itemDef });
+                if (!sortedRarities.ContainsKey(itemDef.rarity))
+                {
+                    sortedRarities.Add(itemDef.rarity, new List<string>() { itemDef.shortname });
+                    continue;
+                }
+
+                sortedRarities[itemDef.rarity].Add(itemDef.shortname);
             }
+
+            Puts("Loaded Rarities...");
 
             return sortedRarities;
         }
