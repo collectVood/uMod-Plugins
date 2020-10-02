@@ -25,6 +25,8 @@ namespace Oxide.Plugins
 
         private Dictionary<LootSpawn, ItemAmountRanged[]> _originItemAmountRange = new Dictionary<LootSpawn, ItemAmountRanged[]>();
 
+        private Dictionary<string, ItemDefinition> _originItemDefinitions = new Dictionary<string, ItemDefinition>();
+
         #endregion
 
         #region Configuration
@@ -69,11 +71,11 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Limit Multipliers to Stacksizes")]
             public bool LimitToStacksizes = true;
 
-            [JsonProperty(PropertyName = "Limit Items Retries (Blacklist or Stacksize <= 0)")]
-            public int LimitItemRetries = 10;
-
             [JsonProperty(PropertyName = "Multiply Blueprints")]
-            public bool BlueprintDuplication = false;            
+            public bool BlueprintDuplication = false;              
+            
+            [JsonProperty(PropertyName = "Disable Blueprint Drops")]
+            public bool DisableBlueprints = false;            
             
             [JsonProperty(PropertyName = "Random Workshop Skins")]
             public bool RandomWorkshopSkins = false;            
@@ -277,14 +279,9 @@ namespace Oxide.Plugins
             return container;
         }
 
-        private object OnBonusItemDrop(Item item, BasePlayer player)
+        private void OnBonusItemDrop(Item item, BasePlayer player)
         {
-            if (!ReinforceRules(item, null))
-            {
-                return false;
-            }
-
-            return null;
+            ReinforceRules(item, null);
         }
 
         private void Unload()
@@ -354,8 +351,10 @@ namespace Oxide.Plugins
                 }
 
                 container.inventory.Clear();
+                ItemManager.DoRemoves();
 
                 PopulateContainer(container, containerData);
+
                 count++;
             }
            
@@ -377,8 +376,6 @@ namespace Oxide.Plugins
 
             AddExtraLoot(container, containerData);
 
-            ItemManager.DoRemoves();
-
             RandomizeDurability(container);
 
             //Generate scrap late so it is in the last slot
@@ -399,29 +396,30 @@ namespace Oxide.Plugins
             for (int i = 0; i < container.inventory.itemList.Count; i++)
             {
                 var item = container.inventory.itemList[i];
-
-                if (!ReinforceRules(item, containerData))
-                {
-                    item.RemoveFromContainer();
-                    item.Remove(0f);
-                    i--;
-                }                          
+                ReinforceRules(item, containerData);                         
             }
-
-            ItemManager.DoRemoves();
         }
 
         /// <summary>
-        /// Removes blacklisted item, applies item skin and applies multipliers; Returns false if item is blacklisted/not allowed
+        /// Removes blacklisted item, applies item skin and applies multipliers
         /// </summary>
         /// <param name="item"></param>
         /// <param name="containerData"></param>
-        /// <returns>/// </returns>
-        private bool ReinforceRules(Item item, ContainerData containerData = null)
+        private void ReinforceRules(Item item, ContainerData containerData = null)
         {
+            if (_configuration.Settings.DisableBlueprints && item.IsBlueprint())
+            {
+                item.info = ItemManager.FindItemDefinition(item.blueprintTarget);
+                item.blueprintTarget = 0;
+
+                item.maxCondition = item.info.condition.max;
+                item.condition = item.info.condition.max;
+                item.OnItemCreated();
+            }
+
             if (!_configuration.Settings.BlueprintDuplication && item.IsBlueprint())
             {
-                return true;
+                return;
             }
 
             if (_configuration.Settings.RandomWorkshopSkins)
@@ -449,7 +447,7 @@ namespace Oxide.Plugins
             //Do not multiply
             if (multiplier == 0f)
             {
-                return true;
+                return;
             }
 
             multiplier *= inItemList ? _configuration.Settings.ItemListMultiplier
@@ -460,15 +458,14 @@ namespace Oxide.Plugins
                 multiplier *= containerData.Multiplier;
             }
 
-            if (_data.Items[item.info.shortname] <= 0)
+            var maxAmount = _data.Items[item.info.shortname];
+            if (maxAmount <= 0)
             {
                 PrintWarning($"Item '{item.info.shortname}' spawned with 0 amount...");
             }
 
-            item.amount = _configuration.Settings.LimitToStacksizes ? (int)Math.Min(item.amount * multiplier, _data.Items[item.info.shortname])
+            item.amount = _configuration.Settings.LimitToStacksizes ? (int)Math.Min(item.amount * multiplier, maxAmount)
                 : (int)(item.amount * multiplier);
-
-            return true;
         }
 
         /// <summary>
@@ -490,17 +487,17 @@ namespace Oxide.Plugins
             }
         }
 
-        private bool IsValid(string itemShortname)
+        private bool IsValid(ItemDefinition itemDefintion)
         {
             if (!_configuration.Settings.LimitToStacksizes)
             {
                 return true;
             }
-            else if (_configuration.BlacklistedItems.Contains(itemShortname))
+            else if (_configuration.BlacklistedItems.Contains(itemDefintion.shortname))
             {
                 return false;
             }
-            else if (_data.Items[itemShortname] <= 0)
+            else if (_data.Items[itemDefintion.shortname] <= 0)
             {
                 return false;
             }
@@ -527,11 +524,14 @@ namespace Oxide.Plugins
                     PrintDebug("Loot spawn data is null");
                     continue;
                 }
-
+                
                 ModifyItemAmountRange(lootSpawn);
             }
 
-            Puts($"Modified '{_originItemAmountRange.Count}' loot data item ranges out of {lootSpawns.Length} ...");
+            if (_originItemAmountRange.Count > 0)
+            {
+                Puts($"Modified '{_originItemAmountRange.Count}' loot data item ranges out of a total of '{lootSpawns.Length}' ...");
+            }
         }
 
         /// <summary>
@@ -545,7 +545,7 @@ namespace Oxide.Plugins
             {
                 var itemRangeToSpawn = origin.items[i];
 
-                if (!IsValid(itemRangeToSpawn.itemDef.shortname))
+                if (!IsValid(itemRangeToSpawn.itemDef))
                 {                    
                     continue;
                 }
