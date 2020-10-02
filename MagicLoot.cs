@@ -25,8 +25,6 @@ namespace Oxide.Plugins
 
         private Dictionary<LootSpawn, ItemAmountRanged[]> _originItemAmountRange = new Dictionary<LootSpawn, ItemAmountRanged[]>();
 
-        private Dictionary<string, ItemDefinition> _originItemDefinitions = new Dictionary<string, ItemDefinition>();
-
         #endregion
 
         #region Configuration
