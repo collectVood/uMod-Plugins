@@ -7,7 +7,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Magic Loot", "collect_vood & Norn", "1.0.3")]
+    [Info("Magic Loot", "collect_vood & Norn", "1.0.4")]
     [Description("Simple components multiplier and loot system")]
     public class MagicLoot : CovalencePlugin
     {
@@ -44,6 +44,13 @@ namespace Oxide.Plugins
             public List<string> BlacklistedItems = new List<string>()
             { 
                 "ammo.rocket.smoke"
+            };            
+            
+            [JsonProperty(PropertyName = "Blacklisted Workshop Skins (Workshop Ids)",
+                ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public List<ulong> BlacklistSkins = new List<ulong>()
+            {
+                10180
             };
 
             [JsonProperty(PropertyName = "Manual Item Multipliers (Key: Item-Shortname, Value: Multiplier)",
@@ -422,15 +429,8 @@ namespace Oxide.Plugins
 
             if (_configuration.Settings.RandomWorkshopSkins)
             {
-                item.skin = GetRandomSkin(item.info);
-                if (item.skin != 0)
-                {
-                    var heldEntity = item.GetHeldEntity();
-                    if (heldEntity != null)
-                    {
-                        heldEntity.skinID = item.skin;
-                    }
-                }
+                var skinId = GetRandomSkin(item.info);
+                ApplySkinToItem(item, skinId);
             }
 
             float multiplier = 1f;
@@ -771,6 +771,7 @@ namespace Oxide.Plugins
             {
                 if (_configuration.BlacklistedItems.Contains(itemDef.shortname))
                 {
+                    PrintDebug($"Filtering out '{itemDef.shortname}'");
                     continue;
                 }
 
@@ -815,12 +816,24 @@ namespace Oxide.Plugins
 
             foreach (var skin in ItemSkinDirectory.ForItem(itemDef))
             {
-                possibleSkins.Add((ulong)skin.id);
+                var skinId = (ulong)skin.id;
+
+                if (_configuration.BlacklistSkins.Contains(skinId))
+                {
+                    continue;
+                }
+
+                possibleSkins.Add(skinId);
             }
 
             foreach (var skin in Rust.Workshop.Approved.All.Values)
             {
                 if (skin.Skinnable.ItemName != itemDef.shortname)
+                {
+                    continue;
+                }
+
+                if (_configuration.BlacklistSkins.Contains(skin.WorkshopdId))
                 {
                     continue;
                 }
@@ -831,6 +844,23 @@ namespace Oxide.Plugins
             _skinsCache.Add(itemDef.itemid, possibleSkins);
 
             return possibleSkins[UnityEngine.Random.Range(0, possibleSkins.Count)];
+        }
+
+        private void ApplySkinToItem(Item item, ulong skinId)
+        {
+            if (skinId == 0)
+            {
+                return;
+            }
+
+            item.skin = skinId;
+            item.MarkDirty();
+            BaseEntity heldEntity = item.GetHeldEntity();
+            if (heldEntity != null)
+            {
+                heldEntity.skinID = skinId;
+                heldEntity.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
+            }
         }
 
         private void PrintDebug(object message)
