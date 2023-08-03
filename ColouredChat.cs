@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
+using System.Text;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
@@ -9,20 +10,23 @@ using Oxide.Core.Plugins;
 using ConVar;
 using UnityEngine;
 using CompanionServer;
+using Pool = Facepunch.Pool;
+using Random = System.Random;
 
 namespace Oxide.Plugins
 {
-    [Info("Coloured Chat", "collect_vood", "2.2.8")]
+    [Info("Coloured Chat", "collect_vood", "2.2.87")]
     [Description("Allows players to change their name & message colour in chat")]
     class ColouredChat : CovalencePlugin
     {
         [PluginReference]
         private Plugin BetterChat, BetterChatMute, ZoneManager;
 
-        #region Constants
+        #region Fields
+        
+        private readonly StringBuilder _sharedStringBuilder = new StringBuilder();
 
         private const string ColourRegex = "^#(?:[0-9a-fA-f]{3}){1,2}$";
-
         private const string ChatFormat = "{0}: {1}";
 
         #endregion
@@ -64,103 +68,103 @@ namespace Oxide.Plugins
 
         #region Config     
 
-        private Configuration config;
+        private Configuration _configuration;
         private class Configuration
         {
             //General
             [JsonProperty(PropertyName = "Player Inactivity Data Removal (days)")]
-            public int inactivityRemovalTime = 7;
+            public int InactivityRemovalTime = 7;
             [JsonProperty(PropertyName = "Block messages of muted players (requires BetterChatMute)")]
-            public bool blockChatMute = true;
+            public bool BlockChatMute = true;
             [JsonProperty(PropertyName = "Rainbow Colours")]
-            public string[] rainbowColours = { "#ff0000", "#ffa500", "#ffff94", "#008000", "#0000ff", "#4b0082", "#ee82ee" };
+            public string[] RainbowColours = { "#ff0000", "#ffa500", "#ffff94", "#008000", "#0000ff", "#4b0082", "#ee82ee" };
             [JsonProperty(PropertyName = "Blocked Characters")]
-            public string[] blockedValues = { "{", "}", "size" };
+            public string[] BlockedValues = { "{", "}", "size" };
 
             //Name
-            [JsonProperty(PropertyName = "Name colour command")]
-            public string nameColourCommand = "colour";
-            [JsonProperty(PropertyName = "Name colours command (Help)")]
-            public string nameColoursCommand = "colours";
+            [JsonProperty(PropertyName = "Name colour commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public string[] NameColourCommands = new string[] { "colour", "color" };
+            [JsonProperty(PropertyName = "Name colour commands (Help)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public string[] NameColoursCommands = new string[] { "colours", "colors" };
             [JsonProperty(PropertyName = "Name show colour permission")]
-            public string namePermShow = "colouredchat.name.show";
+            public string NamePermShow = "colouredchat.name.show";
             [JsonProperty(PropertyName = "Name use permission")]
-            public string namePermUse = "colouredchat.name.use";
+            public string NamePermUse = "colouredchat.name.use";
             [JsonProperty(PropertyName = "Name use gradient permission")]
-            public string namePermGradient = "colouredchat.name.gradient";
+            public string NamePermGradient = "colouredchat.name.gradient";
             [JsonProperty(PropertyName = "Name default rainbow name permission")]
-            public string namePermRainbow = "colouredchat.name.rainbow";
+            public string NamePermRainbow = "colouredchat.name.rainbow";
             [JsonProperty(PropertyName = "Name bypass restrictions permission")]
-            public string namePermBypass = "colouredchat.name.bypass";
+            public string NamePermBypass = "colouredchat.name.bypass";
             [JsonProperty(PropertyName = "Name set others colour permission")]
-            public string namePermSetOthers = "colouredchat.name.setothers";
+            public string NamePermSetOthers = "colouredchat.name.setothers";
             [JsonProperty(PropertyName = "Name get random colour permission")]
-            public string namePermRandomColour = "colouredchat.name.random";
+            public string NamePermRandomColour = "colouredchat.name.random";
             [JsonProperty(PropertyName = "Name use blacklist")]
-            public bool nameUseBlacklist = true;
+            public bool NameUseBlacklist = true;
             [JsonProperty(PropertyName = "Name blocked colour hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> nameBlockColoursHex = new List<string>
+            public List<string> NameBlockColoursHex = new List<string>
             {
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Name blocked colours range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<ColourRange> nameBlacklistedRangeColoursHex = new List<ColourRange>
+            public List<ColourRange> NameBlacklistedRangeColoursHex = new List<ColourRange>
             {
                 { new ColourRange("#000000", "#000000") }
             };
             [JsonProperty(PropertyName = "Name use whitelist")]
-            public bool nameUseWhitelist = false;
+            public bool NameUseWhitelist = false;
             [JsonProperty(PropertyName = "Name whitelisted colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> nameWhitelistedColoursHex = new List<string>
+            public List<string> NameWhitelistedColoursHex = new List<string>
             {
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Name whitelisted colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<ColourRange> nameWhitelistedRangeColoursHex = new List<ColourRange>
+            public List<ColourRange> NameWhitelistedRangeColoursHex = new List<ColourRange>
             {
                 { new ColourRange("#000000", "#FFFFFF") }
             };
 
             //Message
-            [JsonProperty(PropertyName = "Message colour command")]
-            public string messageColourCommand = "mcolour";
-            [JsonProperty(PropertyName = "Message colours command (Help)")]
-            public string messageColoursCommand = "mcolours";
+            [JsonProperty(PropertyName = "Message colour commands", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public string[] MessageColourCommands = new string[] { "mcolour", "mcolor" };
+            [JsonProperty(PropertyName = "Message colour commands (Help)", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+            public string[] MessageColoursCommands = new string[] { "mcolours", "mcolors" };
             [JsonProperty(PropertyName = "Message show colour permission")]
-            public string messagePermShow = "colouredchat.message.show";
+            public string MessagePermShow = "colouredchat.message.show";
             [JsonProperty(PropertyName = "Message use permission")]
-            public string messagePermUse = "colouredchat.message.use";
+            public string MessagePermUse = "colouredchat.message.use";
             [JsonProperty(PropertyName = "Message use gradient permission")]
-            public string messagePermGradient = "colouredchat.message.gradient";
+            public string MessagePermGradient = "colouredchat.message.gradient";
             [JsonProperty(PropertyName = "Message default rainbow name permission")]
-            public string messagePermRainbow = "colouredchat.message.rainbow";
+            public string MessagePermRainbow = "colouredchat.message.rainbow";
             [JsonProperty(PropertyName = "Message bypass restrictions permission")]
-            public string messagePermBypass = "colouredchat.message.bypass";
+            public string MessagePermBypass = "colouredchat.message.bypass";
             [JsonProperty(PropertyName = "Message set others colour permission")]
-            public string messagePermSetOthers = "colouredchat.message.setothers";
+            public string MessagePermSetOthers = "colouredchat.message.setothers";
             [JsonProperty(PropertyName = "Message get random colour permission")]
-            public string messagePermRandomColour = "colouredchat.message.random";
+            public string MessagePermRandomColour = "colouredchat.message.random";
             [JsonProperty(PropertyName = "Message use blacklist")]
-            public bool messageUseBlacklist = true;
+            public bool MessageUseBlacklist = true;
             [JsonProperty(PropertyName = "Message blocked colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> messageBlockColoursHex = new List<string>
+            public List<string> MessageBlockColoursHex = new List<string>
             {
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Message blocked colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<ColourRange> messageBlacklistedRangeColoursHex = new List<ColourRange>
+            public List<ColourRange> MessageBlacklistedRangeColoursHex = new List<ColourRange>
             {
                 { new ColourRange("#000000", "#000000") }
             };
             [JsonProperty(PropertyName = "Message use whitelist")]
-            public bool messageUseWhitelist = false;
+            public bool MessageUseWhitelist = false;
             [JsonProperty(PropertyName = "Message whitelisted colours hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<string> messageWhitelistedColoursHex = new List<string>
+            public List<string> MessageWhitelistedColoursHex = new List<string>
             {
                 { "#000000" }
             };
             [JsonProperty(PropertyName = "Message whitelisted colour range hex", ObjectCreationHandling = ObjectCreationHandling.Replace)]
-            public List<ColourRange> messageWhitelistedRangeColoursHex = new List<ColourRange>
+            public List<ColourRange> MessageWhitelistedRangeColoursHex = new List<ColourRange>
             {
                 { new ColourRange("#000000", "#FFFFFF") }
             };
@@ -169,17 +173,17 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file");
-            config = new Configuration();
+            _configuration = new Configuration();
         }
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
-            config = Config.ReadObject<Configuration>();
+            _configuration = Config.ReadObject<Configuration>();
             SaveConfig();
         }
 
-        protected override void SaveConfig() => Config.WriteObject(config);
+        protected override void SaveConfig() => Config.WriteObject(_configuration);
 
         #region Colour Range Class
 
@@ -292,27 +296,27 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            if (config.messageUseBlacklist && config.messageUseWhitelist || config.nameUseBlacklist && config.nameUseWhitelist) PrintWarning("You are using both black/- and whitelist! This might cause issues.");
+            if (_configuration.MessageUseBlacklist && _configuration.MessageUseWhitelist || _configuration.NameUseBlacklist && _configuration.NameUseWhitelist) PrintWarning("You are using both black/- and whitelist! This might cause issues.");
 
-            permission.RegisterPermission(config.namePermShow, this);
-            permission.RegisterPermission(config.messagePermShow, this);
-            permission.RegisterPermission(config.namePermRainbow, this);
-            permission.RegisterPermission(config.messagePermRainbow, this);
-            permission.RegisterPermission(config.namePermGradient, this);
-            permission.RegisterPermission(config.messagePermGradient, this);
-            permission.RegisterPermission(config.namePermUse, this);
-            permission.RegisterPermission(config.messagePermUse, this);
-            permission.RegisterPermission(config.namePermBypass, this);
-            permission.RegisterPermission(config.messagePermBypass, this);
-            permission.RegisterPermission(config.namePermSetOthers, this);
-            permission.RegisterPermission(config.messagePermSetOthers, this);
-            permission.RegisterPermission(config.namePermRandomColour, this);
-            permission.RegisterPermission(config.messagePermRandomColour, this);
+            permission.RegisterPermission(_configuration.NamePermShow, this);
+            permission.RegisterPermission(_configuration.MessagePermShow, this);
+            permission.RegisterPermission(_configuration.NamePermRainbow, this);
+            permission.RegisterPermission(_configuration.MessagePermRainbow, this);
+            permission.RegisterPermission(_configuration.NamePermGradient, this);
+            permission.RegisterPermission(_configuration.MessagePermGradient, this);
+            permission.RegisterPermission(_configuration.NamePermUse, this);
+            permission.RegisterPermission(_configuration.MessagePermUse, this);
+            permission.RegisterPermission(_configuration.NamePermBypass, this);
+            permission.RegisterPermission(_configuration.MessagePermBypass, this);
+            permission.RegisterPermission(_configuration.NamePermSetOthers, this);
+            permission.RegisterPermission(_configuration.MessagePermSetOthers, this);
+            permission.RegisterPermission(_configuration.NamePermRandomColour, this);
+            permission.RegisterPermission(_configuration.MessagePermRandomColour, this);
 
-            AddCovalenceCommand(config.nameColourCommand, nameof(cmdNameColour));
-            AddCovalenceCommand(config.nameColoursCommand, nameof(cmdNameColours));
-            AddCovalenceCommand(config.messageColourCommand, nameof(cmdMessageColour));
-            AddCovalenceCommand(config.messageColoursCommand, nameof(cmdMessageColours));
+            AddCovalenceCommand(_configuration.NameColourCommands, nameof(cmdNameColour));
+            AddCovalenceCommand(_configuration.NameColoursCommands, nameof(cmdNameColours));
+            AddCovalenceCommand(_configuration.MessageColourCommands, nameof(cmdMessageColour));
+            AddCovalenceCommand(_configuration.MessageColoursCommands, nameof(cmdMessageColours));
 
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
 
@@ -345,14 +349,19 @@ namespace Oxide.Plugins
 
         private object OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel)
         {
-            if (BetterChatIns()) return null;
-            if (config.blockChatMute && BetterChatMuteIns()) if (BetterChatMute.Call<bool>("API_IsMuted", player.IPlayer)) return null;
-            if (player == null) return null;
-            if (ZoneManagerIns() && ZoneManager.Call<bool>("PlayerHasFlag", player, "nochat")) return false;
+            if (BetterChatIns()) 
+                return null;
+            if (_configuration.BlockChatMute && BetterChatMuteIns()) 
+                if (BetterChatMute.Call<bool>("API_IsMuted", player.IPlayer)) 
+                    return null;
+            if (player == null) 
+                return null;
+            if (ZoneManagerIns() && ZoneManager.Call<bool>("PlayerHasFlag", player, "nochat")) 
+                return false;
 
             if (Chat.serverlog)
             {
-                object[] objArray = new object[] { ConsoleColor.DarkYellow, null, null, null };
+                var objArray = new object[] { ConsoleColor.DarkYellow, null, null, null };
                 objArray[1] = string.Concat(new object[] { "[", channel, "] ", player.displayName.EscapeRichText(), ": " });
                 objArray[2] = ConsoleColor.DarkGreen;
                 objArray[3] = message;
@@ -360,13 +369,13 @@ namespace Oxide.Plugins
             }
 
             var colouredChatMessage = FromMessage(player.IPlayer, channel, message);
-            var colouredChatMessageDict = colouredChatMessage.ToDictionary();
+            var colouredChatMessageDict = colouredChatMessage.GetDictionary();
 
             #region API
-
-            foreach (Plugin plugin in plugins.GetAll())
+            
+            foreach (var plugin in plugins.GetAll())
             {
-                object obj = plugin.CallHook("OnColouredChat", colouredChatMessageDict);
+                var obj = plugin.CallHook("OnColouredChat", colouredChatMessageDict);
 
                 if (obj is Dictionary<string, object>)
                 {
@@ -395,14 +404,14 @@ namespace Oxide.Plugins
         {
             if (dict != null)
             {
-                IPlayer player = dict["Player"] as IPlayer;
+                var player = dict["Player"] as IPlayer;
 
                 var colouredChatMessage = FromMessage(player, (Chat.ChatChannel)dict["ChatChannel"], 
                     dict["Message"].ToString());
 
                 #region API
 
-                var colouredChatMessageDict = colouredChatMessage.ToDictionary();
+                var colouredChatMessageDict = colouredChatMessage.GetDictionary();
 
                 foreach (Plugin plugin in plugins.GetAll())
                 {
@@ -451,7 +460,7 @@ namespace Oxide.Plugins
         void cmdMessageColour(IPlayer player, string cmd, string[] args) => ProcessColourCommand(player, cmd, args, true);
 
         void cmdMessageColours(IPlayer player, string cmd, string[] args) => ProcessColoursCommand(player, cmd, args, true);
-
+        
         #endregion
 
         #region Helpers
@@ -460,48 +469,48 @@ namespace Oxide.Plugins
         private bool BetterChatMuteIns() => (BetterChatMute != null && BetterChatMute.IsLoaded);
         private bool ZoneManagerIns() => (ZoneManager != null && ZoneManager.IsLoaded);
         private bool IsValidColour(string input) => Regex.Match(input, ColourRegex).Success;
-        private string GetMessage(string key, IPlayer player, params string[] args) => String.Format(lang.GetMessage(key, this, player.Id), args);
+        private string GetMessage(string key, IPlayer player, params string[] args) => string.Format(lang.GetMessage(key, this, player.Id), args);
 
         //Name
-        private bool HasNameShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermShow));
-        private bool HasNamePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermUse));
-        private bool HasNameRainbow(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermRainbow));
-        private bool CanNameGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermGradient));
-        private bool CanNameBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermBypass));
-        private bool CanNameSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermSetOthers));
-        private bool CanNameRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.namePermRandomColour));
+        private bool HasNameShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.NamePermShow));
+        private bool HasNamePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.NamePermUse));
+        private bool HasNameRainbow(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.NamePermRainbow));
+        private bool CanNameGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.NamePermGradient));
+        private bool CanNameBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.NamePermBypass));
+        private bool CanNameSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.NamePermSetOthers));
+        private bool CanNameRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.NamePermRandomColour));
 
         //Message
-        private bool HasMessageShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermShow));
-        private bool HasMessagePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermUse));
-        private bool HasMessageRainbow(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermRainbow));
-        private bool CanMessageGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermGradient));
-        private bool CanMessageBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermBypass));
-        private bool CanMessageSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermSetOthers));
-        private bool CanMessageRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, config.messagePermRandomColour));
+        private bool HasMessageShowPerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.MessagePermShow));
+        private bool HasMessagePerm(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.MessagePermUse));
+        private bool HasMessageRainbow(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.MessagePermRainbow));
+        private bool CanMessageGradient(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.MessagePermGradient));
+        private bool CanMessageBypass(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.MessagePermBypass));
+        private bool CanMessageSetOthers(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.MessagePermSetOthers));
+        private bool CanMessageRandomColour(IPlayer player) => (player.IsAdmin || permission.UserHasPermission(player.Id, _configuration.MessagePermRandomColour));
 
         private bool IsValidName(string input, IPlayer iPlayer = null)
         {
             if (iPlayer != null && CanNameBypass(iPlayer)) return true;
-            if (config.nameUseBlacklist)
+            if (_configuration.NameUseBlacklist)
             {
                 bool inRange = false;
-                foreach (var colourRange in config.nameBlacklistedRangeColoursHex)
+                foreach (var colourRange in _configuration.NameBlacklistedRangeColoursHex)
                 {
                     inRange = IsInHexRange(input, colourRange._from, colourRange._to);
                     if (inRange) break;
                 }
-                return !config.nameBlockColoursHex.Any(x => (input == x)) && !inRange;
+                return !_configuration.NameBlockColoursHex.Any(x => (input == x)) && !inRange;
             }
-            else if (config.nameUseWhitelist)
+            else if (_configuration.NameUseWhitelist)
             {
                 bool inRange = false;
-                foreach (var colourRange in config.nameWhitelistedRangeColoursHex)
+                foreach (var colourRange in _configuration.NameWhitelistedRangeColoursHex)
                 {
                     inRange = IsInHexRange(input, colourRange._from, colourRange._to);
                     if (!inRange) break;
                 }
-                return config.nameWhitelistedColoursHex.Any(x => (input == x)) || inRange;
+                return _configuration.NameWhitelistedColoursHex.Any(x => (input == x)) || inRange;
             }
             return true;
         }
@@ -509,68 +518,123 @@ namespace Oxide.Plugins
         private bool IsValidMessage(string input, IPlayer iPlayer = null)
         {
             if (iPlayer != null && CanMessageBypass(iPlayer)) return true;
-            if (config.messageUseBlacklist)
+            if (_configuration.MessageUseBlacklist)
             {
                 bool inRange = false;
-                foreach (var colourRange in config.messageBlacklistedRangeColoursHex)
+                foreach (var colourRange in _configuration.MessageBlacklistedRangeColoursHex)
                 {
                     inRange = IsInHexRange(input, colourRange._from, colourRange._to);
-                    if (inRange) break;
+                    if (inRange) 
+                        break;
                 }
-                return !config.messageBlockColoursHex.Any(x => (input == x)) && !inRange;
+                return !_configuration.MessageBlockColoursHex.Any(x => (input == x)) && !inRange;
             }
-            else if (config.messageUseWhitelist)
+            else if (_configuration.MessageUseWhitelist)
             {
                 bool inRange = false;
-                foreach (var colourRange in config.messageWhitelistedRangeColoursHex)
+                foreach (var colourRange in _configuration.MessageWhitelistedRangeColoursHex)
                 {
                     inRange = IsInHexRange(input, colourRange._from, colourRange._to);
-                    if (!inRange) break;
+                    if (!inRange)
+                        break;
                 }
-                return config.messageWhitelistedColoursHex.Any(x => (input == x)) || inRange;
+                return _configuration.MessageWhitelistedColoursHex.Any(x => (input == x)) || inRange;
             }
+            
             return true;
         }
-
-        private void SendMessage(ColouredChatMessage colouredChatMessage, List<BasePlayer> players = null)
+        
+        private void SendMessage(ColouredChatMessage colouredChatMessage)
         {
             var player = colouredChatMessage.Player.Object as BasePlayer;
-            string formattedMsg = string.Format("{0}[{1}]", new string[] { player?.displayName?.EscapeRichText() ?? string.Empty, player?.UserIDString ?? string.Empty });
+            if (player == null)
+                return; // cannot send if player does not exist
 
-            string chatMessage = colouredChatMessage.GetChatOutput();
-            var receivers = new ListHashSet<BasePlayer>();
-
-            if (players != null)
+            var formattedLogMessage = _sharedStringBuilder;
+            formattedLogMessage.Clear();
+            
+            switch (colouredChatMessage.ChatChannel)
             {
-                foreach (var ply in players)
+                case Chat.ChatChannel.Global:
+                case Chat.ChatChannel.Server:
                 {
-                    ply.SendConsoleCommand("chat.add2", (int)colouredChatMessage.ChatChannel, player.userID, colouredChatMessage.Message, colouredChatMessage.Name, colouredChatMessage.Colour);
+                    ConsoleNetwork.BroadcastToAllClients("chat.add2", (int) colouredChatMessage.ChatChannel,
+                        player.userID, colouredChatMessage.Message, colouredChatMessage.Name,
+                        colouredChatMessage.Colour);
+                    
+                    formattedLogMessage.Append("[CHAT] ");
+                    break;
                 }
-                DebugEx.Log(string.Concat("[PRIVATE CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
-            }
-            else if (colouredChatMessage.ChatChannel == Chat.ChatChannel.Global)
-            {
-                receivers = BasePlayer.activePlayerList;
-                DebugEx.Log(string.Concat("[CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
-            }
-            else if (colouredChatMessage.ChatChannel == Chat.ChatChannel.Team)
-            {
-                if (player?.Team == null) return;
-
-                player.Team.BroadcastTeamChat(player.userID, player.displayName, colouredChatMessage.Message, colouredChatMessage.Colour);
-                foreach (ulong memberId in player.Team.members)
+                case Chat.ChatChannel.Team:
                 {
-                    BasePlayer member;
-                    if ((member = RelationshipManager.FindByID(memberId)) != null) 
-                        receivers.Add(member);
+                    if (player.Team == null)
+                        return;
+                    
+                    // Broadcast to rust+ app users
+                    player.Team.BroadcastTeamChat(player.userID, player.displayName, colouredChatMessage.Message, colouredChatMessage.Colour);
+
+                    ConsoleNetwork.SendClientCommand(player.Team.GetOnlineMemberConnections(), "chat.add2",
+                        (int) colouredChatMessage.ChatChannel, player.userID, colouredChatMessage.Message,
+                        colouredChatMessage.Name, colouredChatMessage.Colour);
+
+                    formattedLogMessage.Append("[TEAM CHAT] ");
+                    break;
                 }
-                DebugEx.Log(string.Concat("[TEAM CHAT] ", formattedMsg, " : ", colouredChatMessage.Message), StackTraceLogType.None);
+                case Chat.ChatChannel.Cards:
+                {
+                    if (!player.isMounted)
+                        return;
+                    
+                    var cardTable = player.GetMountedVehicle() as CardTable;
+                    if (cardTable == null || !cardTable.GameController.PlayerIsInGame(player))
+                        return;
+                    
+                    var cardTableConnections = Pool.GetList<Network.Connection>();
+                    cardTable.GameController.GetConnectionsInGame(cardTableConnections);
+                    
+                    if (cardTableConnections.Count > 0)
+                    {
+                        ConsoleNetwork.SendClientCommand(cardTableConnections, "chat.add2",
+                            (int) colouredChatMessage.ChatChannel, player.userID, colouredChatMessage.Message,
+                            colouredChatMessage.Name, colouredChatMessage.Colour);
+                    }
+                    Pool.FreeList(ref cardTableConnections);
+                    
+                    formattedLogMessage.Append("[CARDS CHAT] ");
+                    break;
+                }
+                case Chat.ChatChannel.Local:
+                {
+                    var num = Chat.localChatRange * Chat.localChatRange;
+                    var senderPosition = player.transform.position;
+                    
+                    var closeByConnections = Pool.GetList<Network.Connection>();
+                    foreach (var basePlayer in BasePlayer.activePlayerList)
+                    {
+                        var sqrMagnitude = (basePlayer.transform.position - senderPosition).sqrMagnitude;
+                        if (sqrMagnitude > num)
+                            continue;
+                        
+                        closeByConnections.Add(basePlayer.Connection);
+                    }
+
+                    ConsoleNetwork.SendClientCommand(closeByConnections, "chat.add2",
+                        (int) colouredChatMessage.ChatChannel, player.userID, colouredChatMessage.Message,
+                        colouredChatMessage.Name, colouredChatMessage.Colour);
+                    
+                    Pool.FreeList(ref closeByConnections);
+                    formattedLogMessage.Append("[CHAT] ");
+                    break;
+                }
             }
-
-            foreach (var receiver in receivers)
-                receiver.SendConsoleCommand("chat.add", new object[] { (int)colouredChatMessage.ChatChannel, player.userID, chatMessage });
-
-            Chat.ChatEntry chatentry = new Chat.ChatEntry
+            
+            // Console logging
+            formattedLogMessage.Append(player.displayName.EscapeRichText()).Append('[').Append(player.UserIDString)
+                .Append("] : ").Append(colouredChatMessage.Message);
+            DebugEx.Log(formattedLogMessage);
+            
+            // Rcon logging
+            var chatEntry = new Chat.ChatEntry
             {
                 Channel = colouredChatMessage.ChatChannel,
                 Message = colouredChatMessage.Message,
@@ -579,17 +643,19 @@ namespace Oxide.Plugins
                 Color = colouredChatMessage.Colour,
                 Time = Facepunch.Math.Epoch.Current
             };
-            Facepunch.RCon.Broadcast(Facepunch.RCon.LogType.Chat, chatentry);
+            Facepunch.RCon.Broadcast(Facepunch.RCon.LogType.Chat, chatEntry);
         }
 
         private void ProcessColourCommand(IPlayer player, string cmd, string[] args, bool isMessage = false)
         {
             if (args.Length < 1)
             {
-                player.Reply(GetMessage("IncorrectUsage", player, isMessage ? config.messageColourCommand : config.nameColourCommand, isMessage ? config.messageColoursCommand : config.nameColoursCommand));
+                player.Reply(GetMessage("IncorrectUsage", player,
+                    isMessage ? _configuration.MessageColourCommands[0] : _configuration.NameColourCommands[0],
+                    isMessage ? _configuration.MessageColoursCommands[0] : _configuration.NameColoursCommands[0]));
                 return;
             }
-            string colLower = string.Empty;
+            var colLower = string.Empty;
             if (args[0] == "set")
             {
                 if ((!isMessage && !CanNameSetOthers(player)) || (isMessage && !CanMessageSetOthers(player)))
@@ -599,10 +665,11 @@ namespace Oxide.Plugins
                 }
                 if (args.Length < 3)
                 {
-                    player.Reply(GetMessage("IncorrectSetUsage", player, isMessage ? config.messageColourCommand : config.nameColourCommand));
+                    player.Reply(GetMessage("IncorrectSetUsage", player,
+                        isMessage ? _configuration.MessageColourCommands[0] : _configuration.NameColourCommands[0]));
                     return;
                 }
-                IPlayer target = covalence.Players.FindPlayer(args[1]);
+                var target = covalence.Players.FindPlayer(args[1]);
                 if (target == null)
                 {
                     player.Reply(GetMessage("PlayerNotFound", player, args[1]));
@@ -620,7 +687,8 @@ namespace Oxide.Plugins
                 }
                 if (args.Length < 3)
                 {
-                    player.Reply(GetMessage("IncorrectGroupUsage", player, isMessage ? config.messageColourCommand : config.nameColourCommand));
+                    player.Reply(GetMessage("IncorrectGroupUsage", player,
+                        isMessage ? _configuration.MessageColourCommands[0] : _configuration.NameColourCommands[0]));
                     return;
                 }
                 if (!permission.GroupExists(args[1])) permission.CreateGroup(args[1], string.Empty, 0);
@@ -636,7 +704,8 @@ namespace Oxide.Plugins
                 }
                 if (args.Length < 1)
                 {
-                    player.Reply(GetMessage("IncorrectUsage", player, isMessage ? config.messageColourCommand : config.nameColourCommand));
+                    player.Reply(GetMessage("IncorrectUsage", player,
+                        isMessage ? _configuration.MessageColourCommands[0] : _configuration.NameColourCommands[0]));
                     return;
                 }
                 colLower = args[0].ToLower();
@@ -651,95 +720,129 @@ namespace Oxide.Plugins
                 player.Reply(GetMessage("NoPermission", player));
                 return;
             }
-            string availableCommands = string.Empty;
-
+            var availableCommandsBuilder = _sharedStringBuilder;
+            availableCommandsBuilder.Clear();
+            
             if (isMessage)
             {
-                availableCommands += $"\n/{config.messageColourCommand} <color=#ff6666>#ff6666</color>";
-                if (CanMessageRandomColour(player)) availableCommands += $"\n/{config.messageColourCommand} random";
-                if (CanMessageGradient(player)) availableCommands += $"\n/{config.messageColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ff6666>#ff6666</color>" +
-                                                                     $"\n/{config.messageColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color> <color=#90ee90>#90ee90</color>";
-                if (CanMessageSetOthers(player)) availableCommands += $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff6666>#ff6666</color>" +
-                                                                      $"\n/{config.messageColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
-                if (player.IsAdmin) availableCommands += $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>" +
-                                                         $"\n/{config.messageColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
+                var commandName = _configuration.MessageColourCommands[0];
+                availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" <color=#ff6666>#ff6666</color>");
+                if (CanMessageRandomColour(player))
+                {
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" random");
+                }
+                if (CanMessageGradient(player)) 
+                {
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" gradient <color=#ff6666>#ff6666</color> <color=#ff6666>#ff6666</color>").AppendLine();
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color> <color=#90ee90>#90ee90</color>");
+                }
+                if (CanMessageSetOthers(player))
+                {
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" set <color=#a8a8a8>playerIdOrName</color> <color=#ff6666>#ff6666</color>");
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>");
+                }
+                if (player.IsAdmin)
+                {
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>");
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>");
+                }
             }
             else
             {
-                availableCommands += $"\n/{config.nameColourCommand} <color=#ff6666>#ff6666</color>";
-                if (CanNameRandomColour(player)) availableCommands += $"\n/{config.nameColourCommand} random";
-                if (CanNameGradient(player)) availableCommands += $"\n/{config.nameColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>" +
-                                                                     $"\n/{config.nameColourCommand} gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color> <color=#90ee90>#90ee90</color>";
-                if (CanNameSetOthers(player)) availableCommands += $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> <color=#ff6666>#ff6666</color>" +
-                                                                      $"\n/{config.nameColourCommand} set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
-                if (player.IsAdmin) availableCommands += $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>" +
-                                                         $"\n/{config.nameColourCommand} group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>";
-            }
-
-            string additionalInfo = string.Empty;
-                
-            if (isMessage && config.messageUseWhitelist)
-            {
-                additionalInfo += "Whitelisted Colours:\n";
-                foreach (string colour in config.messageWhitelistedColoursHex)
+                var commandName = _configuration.NameColourCommands[0];
+                availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" <color=#ff6666>#ff6666</color>");
+                if (CanNameRandomColour(player))
                 {
-                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" random");
                 }
-                foreach (var colourRange in config.messageWhitelistedRangeColoursHex)
+                if (CanNameGradient(player)) 
                 {
-                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" gradient <color=#ff6666>#ff6666</color> <color=#ff6666>#ff6666</color>").AppendLine();
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color> <color=#90ee90>#90ee90</color>");
                 }
-            }
-            else if (isMessage && config.messageUseBlacklist)
-            {
-                additionalInfo += "Blacklisted Colours:\n";
-                foreach (string colour in config.messageBlockColoursHex)
+                if (CanNameSetOthers(player)) 
                 {
-                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" set <color=#a8a8a8>playerIdOrName</color> <color=#ff6666>#ff6666</color>");
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" set <color=#a8a8a8>playerIdOrName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>");
                 }
-                foreach (var colourRange in config.messageBlacklistedRangeColoursHex)
+                if (player.IsAdmin)
                 {
-                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
-                }
-            }
-            else if (!isMessage && config.nameUseWhitelist)
-            {
-                additionalInfo += "Whitelisted Colours:\n";
-                foreach (string colour in config.nameWhitelistedColoursHex)
-                {
-                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
-                }
-                foreach (var colourRange in config.nameWhitelistedRangeColoursHex)
-                {
-                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
-                }
-            }
-            else if (!isMessage && config.nameUseBlacklist)
-            {
-                additionalInfo += "Blacklisted Colours:\n";
-                foreach (string colour in config.nameBlockColoursHex)
-                {
-                    additionalInfo += "- <color=" + colour + ">" + colour + "</color>\n";
-                }
-                foreach (var colourRange in config.nameBlacklistedRangeColoursHex)
-                {
-                    additionalInfo += "- From <color=" + colourRange._from + ">" + colourRange._from + "</color> to <color=" + colourRange._to + ">" + colourRange._to + "</color>\n";
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" group <color=#a8a8a8>groupName</color> <color=#ff6666>#ff6666</color>");
+                    availableCommandsBuilder.AppendLine().Append('/').Append(commandName).Append(" group <color=#a8a8a8>groupName</color> gradient <color=#ff6666>#ff6666</color> <color=#ffff94>#ffff94</color>");
                 }
             }
 
-            player.Reply(GetMessage("ColoursInfo", player, availableCommands, additionalInfo));
+            var availableCommands = availableCommandsBuilder.ToString();
+            var additionalInfoBuilder = _sharedStringBuilder;
+            additionalInfoBuilder.Clear();
+            
+            if (isMessage && _configuration.MessageUseWhitelist)
+            {
+                additionalInfoBuilder.AppendLine("Whitelisted Colours:");
+                foreach (var colour in _configuration.MessageWhitelistedColoursHex)
+                {
+                    additionalInfoBuilder.Append("- <color=").Append(colour).Append(">").Append(colour).AppendLine("</color>");
+                }
+                foreach (var colourRange in _configuration.MessageWhitelistedRangeColoursHex)
+                {
+                    additionalInfoBuilder.Append("- From <color=").Append(colourRange._from).Append(">")
+                        .Append(colourRange._from).Append("</color> to <color=").Append(colourRange._to).Append(">")
+                        .Append(colourRange._to).AppendLine("</color>");
+                }
+            }
+            else if (isMessage && _configuration.MessageUseBlacklist)
+            {
+                additionalInfoBuilder.AppendLine("Blacklisted Colours:");
+                foreach (var colour in _configuration.MessageBlockColoursHex)
+                {
+                    additionalInfoBuilder.Append("- <color=").Append(colour).Append(">").Append(colour).Append("</color>");
+                }
+                foreach (var colourRange in _configuration.MessageBlacklistedRangeColoursHex)
+                {
+                    additionalInfoBuilder.Append("- From <color=").Append(colourRange._from).Append(">")
+                        .Append(colourRange._from).Append("</color> to <color=").Append(colourRange._to).Append(">")
+                        .Append(colourRange._to).AppendLine("</color>");
+                }
+            }
+            else if (!isMessage && _configuration.NameUseWhitelist)
+            {
+                additionalInfoBuilder.AppendLine("Whitelisted Colours:");
+                foreach (var colour in _configuration.NameWhitelistedColoursHex)
+                {
+                    additionalInfoBuilder.Append("- <color=").Append(colour).Append(">").Append(colour).AppendLine("</color>");
+                }
+                foreach (var colourRange in _configuration.NameWhitelistedRangeColoursHex)
+                {
+                    additionalInfoBuilder.Append("- From <color=").Append(colourRange._from).Append(">")
+                        .Append(colourRange._from).Append("</color> to <color=").Append(colourRange._to).Append(">")
+                        .Append(colourRange._to).AppendLine("</color>");
+                }
+            }
+            else if (!isMessage && _configuration.NameUseBlacklist)
+            {
+                additionalInfoBuilder.AppendLine("Blacklisted Colours:");
+                foreach (var colour in _configuration.NameBlockColoursHex)
+                {
+                    additionalInfoBuilder.Append("- <color=").Append(colour).Append(">").Append(colour).AppendLine("</color>");
+                }
+                foreach (var colourRange in _configuration.NameBlacklistedRangeColoursHex)
+                {
+                    additionalInfoBuilder.Append("- From <color=").Append(colourRange._from).Append(">")
+                        .Append(colourRange._from).Append("</color> to <color=").Append(colourRange._to).Append(">")
+                        .Append(colourRange._to).AppendLine("</color>");
+                }
+            }
+
+            player.Reply(GetMessage("ColoursInfo", player, availableCommands, additionalInfoBuilder.ToString()));
         }
 
         private string ProcessColourMessage(string message, string colour) => $"<color={colour}>" + message + "</color>";
 
         private void ProcessColour(IPlayer player, IPlayer target, string colLower, string[] colours, bool isMessage = false, string groupName = "")
         {
-            bool isGroup = false;
-            if (!string.IsNullOrEmpty(groupName)) isGroup = true;
-            bool isCalledOnto = false;
-            if (player != target && !isGroup) isCalledOnto = true;
-
-            string key = isGroup ? groupName : target.Id;
+            var isGroup = !string.IsNullOrEmpty(groupName);
+            var isCalledOnto = player != target && !isGroup;
+            var key = isGroup ? groupName : target.Id;
             
             if (!isGroup && !allColourData.ContainsKey(target.Id)) allColourData.Add(target.Id, new PlayerData());
             else if (isGroup && !allColourData.ContainsKey(groupName)) allColourData.Add(groupName, new PlayerData(true));
@@ -751,16 +854,23 @@ namespace Oxide.Plugins
                     player.Reply(GetMessage("NoPermissionGradient", player, isMessage ? "message" : "name"));
                     return;
                 }
-                colours = colours.Where(col => isMessage ? IsValidMessage(col, player) : IsValidName(col, player) && IsValidColour(col) && (IsInvalidCharacter(col) == null ? true : false)).ToArray();
+
+                colours = colours.Where(col =>
+                    isMessage
+                        ? IsValidMessage(col, player)
+                        : IsValidName(col, player) && IsValidColour(col) &&
+                          IsInvalidCharacter(col) == null).ToArray();
                 if (colours.Length < 2)
                 {
-                    player.Reply(GetMessage("IncorrectGradientUsageArgs", player, isMessage ? config.messageColourCommand : config.nameColourCommand));
+                    player.Reply(GetMessage("IncorrectGradientUsageArgs", player,
+                        isMessage ? _configuration.MessageColourCommands[0] : _configuration.NameColourCommands[0]));
                     return;
                 }
                 string gradientName = ProcessGradient(isMessage ? "Example Message" : target.Name, colours, isMessage, player);
                 if (gradientName.Equals(string.Empty))
                 {
-                    player.Reply(GetMessage("IncorrectGradientUsage", player, isMessage ? config.messageColourCommand : config.nameColourCommand));
+                    player.Reply(GetMessage("IncorrectGradientUsage", player,
+                        isMessage ? _configuration.MessageColourCommands[0] : _configuration.NameColourCommands[0]));
                     return;
                 }
                 if (isMessage)
@@ -797,8 +907,19 @@ namespace Oxide.Plugins
                     allColourData[key].NameGradientArgs = null;
                     if (cachedData.ContainsKey(key)) cachedData.Remove(key);
                 }
-                if (string.IsNullOrEmpty(allColourData[key].NameColour) && allColourData[key].NameGradientArgs == null && string.IsNullOrEmpty(allColourData[key].MessageColour) && allColourData[key].MessageGradientArgs == null) allColourData.Remove(key);
-                if (isGroup) ClearCache();
+
+                if (string.IsNullOrEmpty(allColourData[key].NameColour) &&
+                    allColourData[key].NameGradientArgs == null &&
+                    string.IsNullOrEmpty(allColourData[key].MessageColour) &&
+                    allColourData[key].MessageGradientArgs == null)
+                {
+                    allColourData.Remove(key);
+                }
+
+                if (isGroup)
+                {
+                    ClearCache();
+                }
 
                 if (target.IsConnected) target.Reply(GetMessage("ColourRemoved", target, GetCorrectLang(isGroup, isMessage, key)));
                 if (isCalledOnto) player.Reply(GetMessage("ColourRemovedFor", player, target.Name, isMessage ? "message" : "name"));
@@ -828,8 +949,8 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (isMessage) ChangeMessageColour(key, string.Empty, config.rainbowColours);
-                else ChangeNameColour(key, string.Empty, config.rainbowColours);
+                if (isMessage) ChangeMessageColour(key, string.Empty, _configuration.RainbowColours);
+                else ChangeNameColour(key, string.Empty, _configuration.RainbowColours);
                 if (isGroup) ClearCache();
 
                 if (target.IsConnected) target.Reply(GetMessage("RainbowColour", target, GetCorrectLang(isGroup, isMessage, key)));
@@ -863,76 +984,98 @@ namespace Oxide.Plugins
         }
 
         private string ProcessGradient(string name, string[] colourArgs, bool isMessage = false, IPlayer iPlayer = null)
-        {           
-            var chars = name.ToCharArray();
-            string gradientName = string.Empty;
-            var colours = new List<Color>();
+        {
+            var gradientName = _sharedStringBuilder;
+            gradientName.Clear();
+            
+            var colours = Pool.GetList<Color>();
             Color startColour;
             Color endColour;
 
-            int gradientsSteps = chars.Length / (colourArgs.Length - 1);
+            var nameLength = name.Length;
+            var gradientsSteps = nameLength / (colourArgs.Length - 1);
             if (gradientsSteps <= 1)
             {
-                for (int i = 0; i < chars.Length; i++)
+                for (var i = 0; i < nameLength; i++)
                 {
-                    if (i > colourArgs.Length - 1) ColorUtility.TryParseHtmlString(colourArgs[colourArgs.Length - 1], out startColour);
-                    else ColorUtility.TryParseHtmlString(colourArgs[i], out startColour);
+                    if (i > colourArgs.Length - 1)
+                        ColorUtility.TryParseHtmlString(colourArgs[colourArgs.Length - 1], out startColour);
+                    else 
+                        ColorUtility.TryParseHtmlString(colourArgs[i], out startColour);
+                    
                     colours.Add(startColour);
                 }
             }
             else
             {
-                int gradientIterations = chars.Length / gradientsSteps;
-                for (int i = 0; i < gradientIterations; i++)
+                var gradientIterations = nameLength / gradientsSteps;
+                for (var i = 0; i < gradientIterations; i++)
                 {
-                    if (colours.Count >= chars.Length) continue;
-                    if (i > colourArgs.Length - 1) ColorUtility.TryParseHtmlString(colourArgs[colourArgs.Length - 1], out startColour);
-                    else ColorUtility.TryParseHtmlString(colourArgs[i], out startColour);
-                    if (i >= colourArgs.Length - 1) endColour = startColour;
-                    else ColorUtility.TryParseHtmlString(colourArgs[i + 1], out endColour);
-                    foreach (var c in GetGradients(startColour, endColour, gradientsSteps)) colours.Add(c);
+                    if (colours.Count >= nameLength) 
+                        continue;
+                    if (i > colourArgs.Length - 1) 
+                        ColorUtility.TryParseHtmlString(colourArgs[colourArgs.Length - 1], out startColour);
+                    else 
+                        ColorUtility.TryParseHtmlString(colourArgs[i], out startColour);
+                    if (i >= colourArgs.Length - 1) 
+                        endColour = startColour;
+                    else 
+                        ColorUtility.TryParseHtmlString(colourArgs[i + 1], out endColour);
+                    GetAndAddGradients(startColour, endColour, gradientsSteps, colours);
                 }
-                if (colours.Count < chars.Length)
+                if (colours.Count < nameLength)
                 {
                     ColorUtility.TryParseHtmlString(colourArgs[colourArgs.Length - 1], out endColour);
-                    while (colours.Count < chars.Length) colours.Add(endColour);
+                    while (colours.Count < name.Length) 
+                        colours.Add(endColour);
                 }
             }
-            for (int i = 0; i < colours.Count; i++)
+            
+            for (var i = 0; i < colours.Count; i++)
             {
-                gradientName += $"<color=#{ColorUtility.ToHtmlStringRGB(colours[i])}>{chars[i]}</color>";
+                gradientName.Append("<color=#").Append(ColorUtility.ToHtmlStringRGB(colours[i])).Append(">")
+                    .Append(name[i]).Append("</color>");
             }
-            return gradientName;
+            Pool.FreeList(ref colours);
+            
+            return gradientName.ToString();
         }
 
-        private List<Color> GetGradients(Color start, Color end, int steps)
+        /// <summary>
+        /// Gets and adds gradient colours to provided results list
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <param name="steps"></param>
+        /// <param name="results"></param>
+        private void GetAndAddGradients(Color start, Color end, int steps, List<Color> results)
         {
-            var colours = new List<Color>();
+            var stepR = ((end.r - start.r) / (steps - 1));
+            var stepG = ((end.g - start.g) / (steps - 1));
+            var stepB = ((end.b - start.b) / (steps - 1));
 
-            float stepR = ((end.r - start.r) / (steps - 1));
-            float stepG = ((end.g - start.g) / (steps - 1));
-            float stepB = ((end.b - start.b) / (steps - 1));
-
-            for (int i = 0; i < steps; i++)
-            {
-                colours.Add(new Color(start.r + (stepR * i), start.g + (stepG * i), start.b + (stepB * i)));
-            }
-            return colours;
+            for (var i = 0; i < steps; i++)
+                results.Add(new Color(start.r + (stepR * i), start.g + (stepG * i), start.b + (stepB * i)));
         }
 
-        private string GetRndColour() => String.Format("#{0:X6}", new System.Random().Next(0x1000000));
+        private readonly Random _random = new Random();
+        private string GetRndColour() => $"#{_random.Next(0x1000000):X6}";
 
-        private string IsInvalidCharacter(string input) => (config.blockedValues.Where(x => input.Contains(x)).FirstOrDefault()) ?? null;
+        private string IsInvalidCharacter(string input) => _configuration.BlockedValues.FirstOrDefault(x => input.Contains(x));
 
         private void ClearUpData()
         {
-            if (config.inactivityRemovalTime == 0) return;
+            if (_configuration.InactivityRemovalTime == 0) 
+                return;
 
             var copy = new Dictionary<string, PlayerData>(allColourData);
             foreach (var colData in copy)
             {
-                if (colData.Value.LastActive == 0) continue;
-                if (colData.Value.LastActive + (config.inactivityRemovalTime * 86400) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) allColourData.Remove(colData.Key);
+                if (colData.Value.LastActive == 0)
+                    continue;
+                
+                if (colData.Value.LastActive + (_configuration.InactivityRemovalTime * 86400) < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) 
+                    allColourData.Remove(colData.Key);
             }
         }
 
@@ -947,18 +1090,23 @@ namespace Oxide.Plugins
             if (cachedData.ContainsKey(Id)) cachedData.Remove(Id);
         }
 
-        private string GetCorrectLang(bool isGroup, bool isMessage, string key) => isGroup ? (isMessage ? "Group " + key + " message" : "Group " + key + " name") : isMessage ? "Message" : "Name";
+        private string GetCorrectLang(bool isGroup, bool isMessage, string key) => isGroup
+            ?
+            isMessage ? $"Group {key} message" : $"Group {key} name"
+            : isMessage
+                ? "Message"
+                : "Name";
 
         private string GetPrimaryUserGroup(string Id)
         {
             var groups = permission.GetUserGroups(Id);
 
-            string primaryGroup = string.Empty;
-            int groupRank = -1;
+            var primaryGroup = string.Empty;
+            var groupRank = -1;
             foreach (var group in groups)
             {
                 if (!allColourData.ContainsKey(group)) continue;
-                int currentGroupRank = permission.GetGroupRank(group);
+                var currentGroupRank = permission.GetGroupRank(group);
                 if (currentGroupRank > groupRank)
                 {
                     groupRank = currentGroupRank;
@@ -970,10 +1118,11 @@ namespace Oxide.Plugins
 
         private ColouredChatMessage FromMessage(IPlayer player, Chat.ChatChannel channel, string message)
         {
-            var playerData = new PlayerData();
-            if (allColourData.ContainsKey(player.Id)) playerData = allColourData[player.Id];
+            PlayerData playerData;
+            if (!allColourData.TryGetValue(player.Id, out playerData) || playerData == null)
+                playerData = new PlayerData();
+            
             var colouredNameData = GetColouredName(player, playerData);
-                  
             colouredNameData.ChatChannel = channel;
             colouredNameData.Message = GetColouredMessage(player, playerData, message);
             return colouredNameData;
@@ -981,46 +1130,60 @@ namespace Oxide.Plugins
 
         private ColouredChatMessage GetColouredName(IPlayer player, PlayerData playerData)
         {
-            string playerUserName = player.Name;
-            string playerColour = player.IsAdmin ? "#af5" : "#5af";
-            string playerColourNonModified = playerColour;
+            var playerUserName = player.Name;
+            var playerColour = player.IsAdmin ? "#af5" : "#5af";
+            var playerColourNonModified = playerColour;
 
-            if (!cachedData.ContainsKey(player.Id))
+            CachePlayerData cachedPlayerData;
+            if (!cachedData.TryGetValue(player.Id, out cachedPlayerData) || cachedPlayerData == null)
             {
-                string gradientName = string.Empty;
+                var gradientName = string.Empty;
                 if (playerData?.NameGradientArgs != null) 
                     gradientName = ProcessGradient(player.Name, playerData.NameGradientArgs, false, player);
 
-                cachedData.Add(player.Id, new CachePlayerData(gradientName, GetPrimaryUserGroup(player.Id)));
+                cachedData.Add(player.Id, cachedPlayerData = new CachePlayerData(gradientName, GetPrimaryUserGroup(player.Id)));
             }
 
             if (HasNameShowPerm(player))
             {
                 //Gradient Handling
-                if (playerData?.NameGradientArgs != null) playerUserName = cachedData[player.Id].NameColourGradient;
-                else if (!string.IsNullOrEmpty(playerData?.NameColour)) playerColour = playerData.NameColour;
-                else if (playerUserName == player.Name && !string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient)) playerUserName = cachedData[player.Id].NameColourGradient;
+                if (playerData?.NameGradientArgs != null) 
+                    playerUserName = cachedPlayerData.NameColourGradient;
+                
+                else if (!string.IsNullOrEmpty(playerData?.NameColour)) 
+                    playerColour = playerData.NameColour;
+                
+                else if (playerUserName == player.Name && !string.IsNullOrEmpty(cachedPlayerData.NameColourGradient)) 
+                    playerUserName = cachedPlayerData.NameColourGradient;
             }
-
-            string userPrimaryGroup = cachedData[player.Id].PrimaryGroup;
-            if (allColourData.ContainsKey(userPrimaryGroup))
+            
+            if (allColourData.ContainsKey(cachedPlayerData.PrimaryGroup))
             {
-                var groupData = allColourData[userPrimaryGroup];
+                var groupData = allColourData[cachedPlayerData.PrimaryGroup];
                 if (playerUserName == player.Name && playerColour == playerColourNonModified)
                 {
-                    if (groupData?.NameGradientArgs != null) playerUserName = string.IsNullOrEmpty(cachedData[player.Id].NameColourGradient) ?
-                            cachedData[player.Id].NameColourGradient = ProcessGradient(player.Name, groupData.NameGradientArgs, false, player) :
-                            cachedData[player.Id].NameColourGradient;
-                    else if (!string.IsNullOrEmpty(groupData?.NameColour)) playerColour = groupData.NameColour;
+                    if (groupData?.NameGradientArgs != null)
+                    {
+                        playerUserName = string.IsNullOrEmpty(cachedPlayerData.NameColourGradient)
+                            ? cachedPlayerData.NameColourGradient = ProcessGradient(player.Name,
+                                groupData.NameGradientArgs, false, player)
+                            : cachedPlayerData.NameColourGradient;
+                    }
+                    else if (!string.IsNullOrEmpty(groupData?.NameColour)) 
+                        playerColour = groupData.NameColour;
                 }
             }
 
-            return new ColouredChatMessage() { Player = player, Name = playerUserName, Colour = (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour };
+            return new ColouredChatMessage()
+            {
+                Player = player, Name = playerUserName,
+                Colour = (playerColour == playerColourNonModified && BetterChatIns()) ? string.Empty : playerColour
+            };
         }
 
         private string GetColouredMessage(IPlayer player, PlayerData playerData, string message)
         {
-            string playerMessage = message;
+            var playerMessage = message;
 
             if (HasNameShowPerm(player))
             {
@@ -1031,7 +1194,7 @@ namespace Oxide.Plugins
             }
 
             //Group Handling
-            string userPrimaryGroup = cachedData[player.Id].PrimaryGroup;
+            var userPrimaryGroup = cachedData[player.Id].PrimaryGroup;
             if (allColourData.ContainsKey(userPrimaryGroup))
             {
                 var groupData = allColourData[userPrimaryGroup];
@@ -1058,7 +1221,10 @@ namespace Oxide.Plugins
 
             if ((mainColour.r >= start.r && mainColour.r <= end.r) &&
                 (mainColour.g >= start.g && mainColour.g <= end.g) &&
-                (mainColour.b >= start.b && mainColour.b <= end.b)) return true;
+                (mainColour.b >= start.b && mainColour.b <= end.b))
+            {
+                return true;
+            }
 
             return false;
         }
@@ -1108,7 +1274,7 @@ namespace Oxide.Plugins
         {
             var colouredChatMessage = FromMessage(iPlayer, channel, message);
 
-            string formattedMessage = colouredChatMessage.GetChatOutput();
+            var formattedMessage = colouredChatMessage.GetChatOutput();
 
             if (BetterChatIns())
             {
@@ -1123,7 +1289,7 @@ namespace Oxide.Plugins
             return formattedMessage;
         }
 
-        public class ColouredChatMessage
+        public struct ColouredChatMessage
         {
             public IPlayer Player;
             public Chat.ChatChannel ChatChannel;
@@ -1131,11 +1297,8 @@ namespace Oxide.Plugins
             public string Colour;
             public string Message;
 
-            public ColouredChatMessage()
-            {
-
-            }
-
+            private static readonly Dictionary<string, object> _colouredChatDictionary = new Dictionary<string, object>();
+            
             public ColouredChatMessage(IPlayer player, Chat.ChatChannel chatChannel, string name, string colour, string message)
             {
                 Player = player;
@@ -1145,14 +1308,20 @@ namespace Oxide.Plugins
                 Message = message;
             }
 
-            public Dictionary<string, object> ToDictionary() => new Dictionary<string, object>
+            /// <summary>
+            /// Gets coloured chat dictionary
+            /// <remarks>Note: this is a shared dictionary instance over all ColouredChatMessage's, do not store random stuff in here!</remarks>
+            /// </summary>
+            /// <returns></returns>
+            public Dictionary<string, object> GetDictionary()
             {
-                [nameof(Player)] = Player,
-                [nameof(ChatChannel)] = ChatChannel,
-                [nameof(Name)] = Name,
-                [nameof(Colour)] = Colour,
-                [nameof(Message)] = Message
-            };
+                _colouredChatDictionary[nameof(Player)] = Player;
+                _colouredChatDictionary[nameof(ChatChannel)] = ChatChannel;
+                _colouredChatDictionary[nameof(Name)] = Name;
+                _colouredChatDictionary[nameof(Colour)] = Colour;
+                _colouredChatDictionary[nameof(Message)] = Message;
+                return _colouredChatDictionary;
+            }
 
             public static ColouredChatMessage FromDictionary(Dictionary<string, object> dict)
             {
